@@ -5,6 +5,7 @@ import 'state/app_store.dart';
 import 'screens/splash_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/auth_screens.dart';
+import 'screens/admin/admin_dashboard_screen.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -29,6 +30,7 @@ class GullyScoreApp extends StatelessWidget {
         '/login':       (_) => const LoginScreen(),
         '/signup':      (_) => const SignUpScreen(),
         '/home':        (_) => const _PlaceholderHome(),
+        '/admin':       (_) => const AdminDashboardScreen(),
       },
     );
   }
@@ -62,7 +64,17 @@ class _PlaceholderHome extends StatelessWidget {
               style:
                   const TextStyle(fontSize: 16, color: Color(0xFF757575)),
             ),
-            const SizedBox(height: 40),
+            const SizedBox(height: 24),
+            if (store.selectedRole == UserRole.admin)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: TextButton.icon(
+                  onPressed: () => Navigator.pushNamed(context, '/admin'),
+                  icon: const Icon(Icons.admin_panel_settings, color: Color(0xFF1565C0)),
+                  label: const Text('Open admin panel', style: TextStyle(color: Color(0xFF1565C0), fontWeight: FontWeight.w600)),
+                ),
+              ),
+            const SizedBox(height: 16),
             GestureDetector(
               onTap: () {
                 store.logout();
