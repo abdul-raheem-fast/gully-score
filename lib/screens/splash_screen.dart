@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 
@@ -14,6 +16,8 @@ class _SplashScreenState extends State<SplashScreen>
   late AnimationController _textCtrl;
   late AnimationController _glowCtrl;
   late AnimationController _dotsCtrl;
+
+  Timer? _transitionTimer;
 
   late Animation<double> _ballScale;
   late Animation<double> _ballFade;
@@ -59,7 +63,8 @@ class _SplashScreenState extends State<SplashScreen>
     _ballCtrl.forward().then((_) =>
         _textCtrl.forward().then((_) => _dotsCtrl.forward()));
 
-    Future.delayed(const Duration(milliseconds: 3000), () {
+    // Keep reference so we can cancel in dispose (important for tests).
+    _transitionTimer = Timer(const Duration(milliseconds: 3000), () {
       if (mounted) Navigator.pushReplacementNamed(context, '/onboarding');
     });
   }
@@ -70,6 +75,7 @@ class _SplashScreenState extends State<SplashScreen>
     _textCtrl.dispose();
     _glowCtrl.dispose();
     _dotsCtrl.dispose();
+    _transitionTimer?.cancel();
     super.dispose();
   }
 

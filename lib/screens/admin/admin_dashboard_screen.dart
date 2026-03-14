@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../route_paths.dart';
 import '../../theme/app_theme.dart';
-import 'admin_users_screen.dart';
 
 /// Admin dashboard — Sprint 1 prototype (Abdul Raheem)
 class AdminDashboardScreen extends StatelessWidget {
@@ -11,7 +11,7 @@ class AdminDashboardScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: C.bg,
       appBar: AppBar(
-        title: const Text('Admin'),
+        title: const Text('Admin panel'),
         backgroundColor: C.adminBlue,
         foregroundColor: C.white,
         elevation: 0,
@@ -34,10 +34,14 @@ class AdminDashboardScreen extends StatelessWidget {
           Text('Manage', style: TextStyle(fontSize: 14, color: C.grey, fontWeight: FontWeight.w600)),
           const SizedBox(height: 12),
           _tile(context, Icons.people_outline, 'Users', 'View registered users', () {
-            Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminUsersScreen()));
+            Navigator.pushNamed(context, RoutePaths.adminUsers);
           }),
-          _tile(context, Icons.sports_cricket, 'Matches', 'Coming next sprint', null),
-          _tile(context, Icons.groups_outlined, 'Teams', 'Coming next sprint', null),
+          _tile(context, Icons.sports_cricket, 'Matches', 'Manage matches', () {
+            Navigator.pushNamed(context, RoutePaths.adminMatches);
+          }),
+          _tile(context, Icons.groups_outlined, 'Teams', 'Manage teams', () {
+            Navigator.pushNamed(context, RoutePaths.adminTeams);
+          }),
         ],
       ),
     );
@@ -54,7 +58,14 @@ class AdminDashboardScreen extends StatelessWidget {
         ),
         child: Column(
           children: [
-            Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: color)),
+            TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0, end: 1),
+              duration: const Duration(milliseconds: 800),
+              builder: (context, value, child) {
+                return Opacity(opacity: value, child: child);
+              },
+              child: Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: color)),
+            ),
             const SizedBox(height: 4),
             Text(label, style: TextStyle(fontSize: 11, color: C.grey)),
           ],
