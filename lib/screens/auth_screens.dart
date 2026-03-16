@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/widgets.dart';
 import '../state/app_store.dart';
+import '../route_paths.dart';
 
 // ════════════════════════════════════════════════════════
 //  ROLE SELECTION  —  "Who are you?"
@@ -395,15 +396,81 @@ class _LoginScreenState extends State<LoginScreen>
   Color get _c => _role == UserRole.admin ? C.adminBlue : C.g1;
   String get _roleLabel => _role == UserRole.admin ? 'Admin' : 'Player';
   String get _roleEmoji => _role == UserRole.admin ? '👑' : '🏏';
+  String get _targetAfterLogin =>
+      _role == UserRole.admin ? RoutePaths.admin : RoutePaths.home;
 
-  void _signIn() async {
-    setState(() => _loading = true);
-    await Future.delayed(const Duration(milliseconds: 800));
-    if (mounted) {
-      AppStore.of(context).login(
-          _emailCtrl.text.isEmpty ? 'Abdul Raheem' : _emailCtrl.text);
-      Navigator.pushReplacementNamed(context, '/home');
+  bool _isValidEmail(String email) {
+    final trimmed = email.trim();
+    final regex = RegExp(r'^[\w\.\-]+@gmail\.com$');
+    return regex.hasMatch(trimmed);
+  }
+
+  bool _isValidPassword(String password) {
+    final regex = RegExp(r'^(?=.*[A-Z])(?=.*[^A-Za-z0-9]).{8,}$');
+    return regex.hasMatch(password);
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red.shade600,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  Future<void> _signIn() async {
+    final email = _emailCtrl.text.trim();
+    final password = _passCtrl.text;
+
+    if (email.isEmpty || password.isEmpty) {
+      _showError('Please enter both email and password');
+      return;
     }
+
+    if (!_isValidEmail(email)) {
+      _showError('Email must be a valid Gmail address (e.g. user@gmail.com)');
+      return;
+    }
+
+    if (!_isValidPassword(password)) {
+      _showError(
+          'Password must be at least 8 characters with 1 uppercase and 1 special character');
+      return;
+    }
+
+    final store = AppStore.of(context);
+    setState(() => _loading = true);
+    await Future.delayed(const Duration(milliseconds: 600));
+
+    final user = store.authenticate(
+      email: email,
+      password: password,
+      role: _role,
+    );
+
+    if (!mounted) return;
+
+    setState(() => _loading = false);
+
+    if (user == null) {
+      final existsWithEmail = store.users.any(
+        (u) =>
+            u.role == _role &&
+            u.email.toLowerCase() == email.toLowerCase(),
+      );
+      if (existsWithEmail) {
+        _showError('Incorrect password, try again');
+      } else {
+        _showError('No account found with this email for $_roleLabel');
+      }
+      return;
+    }
+
+    store.login(user.name.isEmpty ? email : user.name);
+    Navigator.pushReplacementNamed(context, _targetAfterLogin);
   }
 
   @override
@@ -678,16 +745,69 @@ class _SignUpScreenState extends State<SignUpScreen>
   Color get _c => _role == UserRole.admin ? C.adminBlue : C.g1;
   String get _roleLabel => _role == UserRole.admin ? 'Admin' : 'Player';
   String get _roleEmoji => _role == UserRole.admin ? '👑' : '🏏';
+  String get _targetAfterSignup =>
+      _role == UserRole.admin ? RoutePaths.admin : RoutePaths.home;
 
-  void _create() async {
-    setState(() => _loading = true);
-    await Future.delayed(const Duration(milliseconds: 800));
-    if (mounted) {
-      final name =
-          _nameCtrl.text.trim().isEmpty ? 'Abdul Raheem' : _nameCtrl.text.trim();
-      AppStore.of(context).login(name);
-      Navigator.pushReplacementNamed(context, '/home');
+  bool _isValidEmail(String email) {
+    final trimmed = email.trim();
+    final regex = RegExp(r'^[\w\.\-]+@gmail\.com$');
+    return regex.hasMatch(trimmed);
+  }
+
+  bool _isValidPassword(String password) {
+    final regex = RegExp(r'^(?=.*[A-Z])(?=.*[^A-Za-z0-9]).{8,}$');
+    return regex.hasMatch(password);
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red.shade600,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  Future<void> _create() async {
+    final name = _nameCtrl.text.trim();
+    final email = _emailCtrl.text.trim();
+    final password = _passCtrl.text;
+
+    if (name.isEmpty || email.isEmpty || password.isEmpty) {
+      _showError('Name, email and password are required');
+      return;
     }
+
+    if (!_isValidEmail(email)) {
+      _showError('Email must be a valid Gmail address (e.g. user@gmail.com)');
+      return;
+    }
+
+    if (!_isValidPassword(password)) {
+      _showError(
+          'Password must be at least 8 characters with 1 uppercase and 1 special character');
+      return;
+    }
+
+    final store = AppStore.of(context);
+
+    setState(() => _loading = true);
+    await Future.delayed(const Duration(milliseconds: 700));
+
+    if (!mounted) return;
+
+    store.registerUser(
+      email: email,
+      password: password,
+      name: name,
+      role: _role,
+    );
+
+    store.login(name);
+    setState(() => _loading = false);
+    Navigator.pushReplacementNamed(context, _targetAfterSignup);
   }
 
   @override

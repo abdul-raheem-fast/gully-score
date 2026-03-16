@@ -4,6 +4,20 @@ import '../models/admin_models.dart';
 
 enum UserRole { admin, player }
 
+class AuthUser {
+  final String email;
+  final String password;
+  final String name;
+  final UserRole role;
+
+  const AuthUser({
+    required this.email,
+    required this.password,
+    required this.name,
+    required this.role,
+  });
+}
+
 class AppStore extends StatefulWidget {
   final Widget child;
   const AppStore({super.key, required this.child});
@@ -19,6 +33,8 @@ class AppStoreState extends State<AppStore> {
   UserRole? selectedRole;
   bool isLoggedIn = false;
   String userName = '';
+
+  final List<AuthUser> _users = [];
 
   // In-memory demo data for admin screens.
   final List<AdminMatch> _matches = [
@@ -109,6 +125,7 @@ class AppStoreState extends State<AppStore> {
 
   List<AdminMatch> get matches => List.unmodifiable(_matches);
   List<AdminTeam> get teams => List.unmodifiable(_teams);
+  List<AuthUser> get users => List.unmodifiable(_users);
 
   void setRole(UserRole role) => setState(() => selectedRole = role);
 
@@ -116,6 +133,48 @@ class AppStoreState extends State<AppStore> {
         isLoggedIn = true;
         userName = name;
       });
+
+  void registerUser({
+    required String email,
+    required String password,
+    required String name,
+    required UserRole role,
+  }) {
+    final existingIndex = _users.indexWhere(
+      (u) => u.email.toLowerCase() == email.toLowerCase() && u.role == role,
+    );
+    final user = AuthUser(
+      email: email.trim(),
+      password: password,
+      name: name.trim(),
+      role: role,
+    );
+
+    setState(() {
+      if (existingIndex >= 0) {
+        _users[existingIndex] = user;
+      } else {
+        _users.add(user);
+      }
+    });
+  }
+
+  AuthUser? authenticate({
+    required String email,
+    required String password,
+    required UserRole role,
+  }) {
+    try {
+      return _users.firstWhere(
+        (u) =>
+            u.role == role &&
+            u.email.toLowerCase() == email.trim().toLowerCase() &&
+            u.password == password,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
 
   void logout() => setState(() {
         isLoggedIn = false;
