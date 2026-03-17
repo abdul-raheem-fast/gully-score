@@ -7,9 +7,7 @@ import 'player_matches_screen.dart';
 import 'player_stats_screen.dart';
 import 'player_profile_screen.dart';
 
-// ─────────────────────────────────────────────────────────────
-//  PLAYER HOME — shell with bottom nav
-// ─────────────────────────────────────────────────────────────
+
 class PlayerHomeScreen extends StatefulWidget {
   const PlayerHomeScreen({super.key});
 
