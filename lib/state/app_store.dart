@@ -34,7 +34,24 @@ class AppStoreState extends State<AppStore> {
   bool isLoggedIn = false;
   String userName = '';
 
-  final List<AuthUser> _users = [];
+  // ── Hardcoded demo users ─────────────────────────────────────
+  // These allow login without registering.  Credentials:
+  //   Player  →  player@gmail.com  /  Player@123
+  //   Admin   →  admin@gmail.com   /  Admin@123
+  final List<AuthUser> _users = [
+    const AuthUser(
+      email: 'player@gmail.com',
+      password: 'Player@123',
+      name: 'Demo Player',
+      role: UserRole.player,
+    ),
+    const AuthUser(
+      email: 'admin@gmail.com',
+      password: 'Admin@123',
+      name: 'Demo Admin',
+      role: UserRole.admin,
+    ),
+  ];
 
   // In-memory demo data for admin screens.
   final List<AdminMatch> _matches = [
