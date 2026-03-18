@@ -42,7 +42,7 @@ class AppStoreState extends State<AppStore> {
     const AuthUser(
       email: 'player@gmail.com',
       password: 'Player@123',
-      name: 'Demo Player',
+      name: 'Babar Azam',
       role: UserRole.player,
     ),
     const AuthUser(

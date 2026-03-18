@@ -18,50 +18,89 @@ class PlayerProfileScreen extends StatelessWidget {
       body: CustomScrollView(
         physics: const BouncingScrollPhysics(),
         slivers: [
-          // Avatar + name header
+          // ── Hero header ──────────────────────────────────────────
           SliverToBoxAdapter(
             child: Container(
               width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(20, 60, 20, 32),
+              padding: const EdgeInsets.fromLTRB(20, 64, 20, 36),
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Color(0xFF1A5C20), Color(0xFF2E7D32)],
+                  colors: [Color(0xFF1B5E20), Color(0xFF388E3C)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
               ),
               child: Column(children: [
-                // Avatar
+                // Avatar with glow ring
                 Container(
-                  width: 88,
-                  height: 88,
+                  width: 96,
+                  height: 96,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Colors.white.withAlpha(30),
-                    border: Border.all(color: Colors.white38, width: 2.5),
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF66BB6A), Color(0xFF2E7D32)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    border: Border.all(color: Colors.white38, width: 3),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withAlpha(60),
+                        blurRadius: 20,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
                   ),
                   child: Center(
                     child: Text(initials,
                         style: const TextStyle(
                             color: C.white,
-                            fontSize: 30,
-                            fontWeight: FontWeight.w800)),
+                            fontSize: 32,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1)),
                   ),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 16),
                 Text(name,
                     style: const TextStyle(
                         color: C.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800)),
-                const SizedBox(height: 4),
-                const Text('🏏 Street Stars  •  Batsman',
-                    style: TextStyle(color: Colors.white70, fontSize: 13)),
+                        fontSize: 24,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.3)),
+                const SizedBox(height: 6),
+                // Stats row
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    _statBadge('🏏', 'Batsman'),
+                    const SizedBox(width: 10),
+                    Container(
+                        width: 1, height: 14, color: Colors.white30),
+                    const SizedBox(width: 10),
+                    _statBadge('⭐', 'Street Stars'),
+                    const SizedBox(width: 10),
+                    Container(
+                        width: 1, height: 14, color: Colors.white30),
+                    const SizedBox(width: 10),
+                    _statBadge('📍', 'Lahore'),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                // Quick stat pills
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _quickStat('347', 'Runs'),
+                    _quickStat('12', 'Matches'),
+                    _quickStat('58.2', 'Avg'),
+                    _quickStat('2', 'Fifties'),
+                  ],
+                ),
               ]),
             ),
           ),
 
-          // Profile info tiles
+          // ── Profile info tiles ────────────────────────────────────
           SliverPadding(
             padding: const EdgeInsets.all(20),
             sliver: SliverList(
@@ -73,8 +112,10 @@ class PlayerProfileScreen extends StatelessWidget {
                 ]),
                 const SizedBox(height: 16),
                 _section(context, 'Cricket Profile', [
-                  _tile(Icons.sports_cricket_outlined, 'Playing Role', 'Batsman'),
+                  _tile(Icons.sports_cricket_outlined, 'Playing Role',
+                      'Batsman'),
                   _tile(Icons.groups_2_outlined, 'Team', 'Street Stars'),
+                  _tile(Icons.emoji_events_outlined, 'Jersey No.', '#10'),
                   _tile(Icons.location_on_outlined, 'City', 'Lahore, Pakistan'),
                 ]),
                 const SizedBox(height: 16),
@@ -85,42 +126,79 @@ class PlayerProfileScreen extends StatelessWidget {
                 ]),
                 const SizedBox(height: 24),
 
-                // Logout
-                GestureDetector(
+                // ── Edit Profile button ──────────────────────────
+                _HoverButton(
+                  onTap: () {},
+                  filled: true,
+                  color: C.g2,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [
+                      Icon(Icons.edit_outlined, color: C.white, size: 18),
+                      SizedBox(width: 8),
+                      Text('Edit Profile',
+                          style: TextStyle(
+                              color: C.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15)),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
+                // ── Logout button ──────────────────────────────
+                _HoverButton(
                   onTap: () {
                     store.logout();
                     Navigator.pushReplacementNamed(
                         context, RoutePaths.roleSelect);
                   },
-                  child: Container(
-                    width: double.infinity,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      border:
-                          Border.all(color: Colors.red.shade300, width: 1.5),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.logout_rounded,
-                              color: Colors.red.shade600, size: 20),
-                          const SizedBox(width: 8),
-                          Text('Log Out',
-                              style: TextStyle(
-                                  color: Colors.red.shade600,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 15)),
-                        ]),
+                  filled: false,
+                  color: Colors.red.shade400,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.logout_rounded,
+                          color: Colors.red.shade600, size: 18),
+                      const SizedBox(width: 8),
+                      Text('Log Out',
+                          style: TextStyle(
+                              color: Colors.red.shade600,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 15)),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 32),
+
+                const SizedBox(height: 36),
               ]),
             ),
           ),
         ],
       ),
     );
+  }
+
+  Widget _statBadge(String emoji, String label) {
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      Text(emoji, style: const TextStyle(fontSize: 13)),
+      const SizedBox(width: 4),
+      Text(label,
+          style: const TextStyle(
+              color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w500)),
+    ]);
+  }
+
+  Widget _quickStat(String value, String label) {
+    return Column(children: [
+      Text(value,
+          style: const TextStyle(
+              color: C.white, fontSize: 20, fontWeight: FontWeight.w800)),
+      const SizedBox(height: 2),
+      Text(label,
+          style: const TextStyle(color: Colors.white60, fontSize: 11)),
+    ]);
   }
 
   Widget _section(BuildContext context, String title, List<Widget> children) {
@@ -140,10 +218,10 @@ class PlayerProfileScreen extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 14, 16, 6),
           child: Text(title,
               style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
                   color: C.grey,
-                  letterSpacing: 0.8)),
+                  letterSpacing: 1.1)),
         ),
         ...children,
       ]),
@@ -151,18 +229,141 @@ class PlayerProfileScreen extends StatelessWidget {
   }
 
   Widget _tile(IconData icon, String label, String value) {
-    return ListTile(
-      dense: true,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
-      leading: Icon(icon, color: C.g2, size: 21),
-      title: Text(label,
-          style: const TextStyle(
-              fontSize: 13, color: C.grey, fontWeight: FontWeight.w400)),
-      trailing: Text(value,
-          style: const TextStyle(
-              fontSize: 13.5,
-              color: C.dark,
-              fontWeight: FontWeight.w600)),
+    return _HoverTile(icon: icon, label: label, value: value);
+  }
+}
+
+// ── Hoverable press-down tile ─────────────────────────────────
+class _HoverTile extends StatefulWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  const _HoverTile(
+      {required this.icon, required this.label, required this.value});
+
+  @override
+  State<_HoverTile> createState() => _HoverTileState();
+}
+
+class _HoverTileState extends State<_HoverTile> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        color: _hovered ? C.gLight.withAlpha(80) : Colors.transparent,
+        child: ListTile(
+          dense: true,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 3),
+          leading: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            padding: const EdgeInsets.all(7),
+            decoration: BoxDecoration(
+              color: _hovered ? C.g2.withAlpha(25) : Colors.grey.shade50,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(widget.icon,
+                color: _hovered ? C.g2 : C.grey, size: 18),
+          ),
+          title: Text(widget.label,
+              style: TextStyle(
+                  fontSize: 13,
+                  color: _hovered ? C.g2 : C.grey,
+                  fontWeight: FontWeight.w500)),
+          trailing: Text(widget.value,
+              style: const TextStyle(
+                  fontSize: 13.5,
+                  color: C.dark,
+                  fontWeight: FontWeight.w600)),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Hoverable press-down button ────────────────────────────────
+class _HoverButton extends StatefulWidget {
+  final VoidCallback onTap;
+  final Widget child;
+  final bool filled;
+  final Color color;
+  const _HoverButton(
+      {required this.onTap,
+      required this.child,
+      required this.filled,
+      required this.color});
+
+  @override
+  State<_HoverButton> createState() => _HoverButtonState();
+}
+
+class _HoverButtonState extends State<_HoverButton>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _c;
+  late Animation<double> _scale;
+  bool _hovered = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 100));
+    _scale = Tween(begin: 1.0, end: 0.97)
+        .animate(CurvedAnimation(parent: _c, curve: Curves.easeOut));
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTapDown: (_) => _c.forward(),
+        onTapUp: (_) {
+          _c.reverse();
+          widget.onTap();
+        },
+        onTapCancel: () => _c.reverse(),
+        child: ScaleTransition(
+          scale: _scale,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 160),
+            width: double.infinity,
+            height: 52,
+            decoration: BoxDecoration(
+              color: widget.filled
+                  ? (_hovered
+                      ? widget.color.withAlpha(220)
+                      : widget.color)
+                  : (_hovered ? widget.color.withAlpha(20) : Colors.transparent),
+              border: Border.all(color: widget.color, width: 1.5),
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: widget.filled && _hovered
+                  ? [
+                      BoxShadow(
+                          color: widget.color.withAlpha(60),
+                          blurRadius: 14,
+                          offset: const Offset(0, 4))
+                    ]
+                  : [],
+            ),
+            child: widget.child,
+          ),
+        ),
+      ),
     );
   }
 }

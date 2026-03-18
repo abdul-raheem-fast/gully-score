@@ -359,6 +359,7 @@ class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
   final _emailCtrl = TextEditingController();
   final _passCtrl = TextEditingController();
+  final _passFocus = FocusNode();
   bool _obscure = true;
   bool _loading = false;
   late UserRole _role;
@@ -390,6 +391,7 @@ class _LoginScreenState extends State<LoginScreen>
     _ctrl.dispose();
     _emailCtrl.dispose();
     _passCtrl.dispose();
+    _passFocus.dispose();
     super.dispose();
   }
 
@@ -558,6 +560,9 @@ class _LoginScreenState extends State<LoginScreen>
                     icon: Icons.email_outlined,
                     ctrl: _emailCtrl,
                     keyType: TextInputType.emailAddress,
+                    textInputAction: TextInputAction.next,
+                    onSubmitted: (_) =>
+                        FocusScope.of(context).requestFocus(_passFocus),
                   ),
                   const SizedBox(height: 20),
 
@@ -568,6 +573,9 @@ class _LoginScreenState extends State<LoginScreen>
                     icon: Icons.lock_outline,
                     obscure: _obscure,
                     ctrl: _passCtrl,
+                    focusNode: _passFocus,
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) => _signIn(),
                     suffix: GestureDetector(
                       onTap: () =>
                           setState(() => _obscure = !_obscure),

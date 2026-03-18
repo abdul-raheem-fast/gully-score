@@ -95,6 +95,9 @@ class AppField extends StatelessWidget {
   final bool obscure;
   final TextEditingController? ctrl;
   final TextInputType keyType;
+  final FocusNode? focusNode;
+  final TextInputAction? textInputAction;
+  final ValueChanged<String>? onSubmitted;
 
   const AppField({
     super.key,
@@ -105,6 +108,9 @@ class AppField extends StatelessWidget {
     this.obscure = false,
     this.ctrl,
     this.keyType = TextInputType.text,
+    this.focusNode,
+    this.textInputAction,
+    this.onSubmitted,
   });
 
   @override
@@ -120,6 +126,9 @@ class AppField extends StatelessWidget {
         controller: ctrl,
         obscureText: obscure,
         keyboardType: keyType,
+        focusNode: focusNode,
+        textInputAction: textInputAction,
+        onSubmitted: onSubmitted,
         decoration: InputDecoration(
           hintText: hint,
           prefixIcon: Icon(icon, color: C.hint, size: 19),
