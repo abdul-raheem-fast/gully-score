@@ -1,17 +1,42 @@
-# gullyscore
+# Gully Score
 
-A new Flutter project.
+Flutter cricket scoring & analytics app with **Player** and **Admin** prototype flows.
 
-## Getting Started
+## Features (current)
 
-This project is a starting point for a Flutter application.
+- **Auth + role selection** (Player/Admin)
+- **Player app**: Home, Matches, Stats, Profile (prototype UI)
+- **Admin panel**: Dashboard, Users, Matches, Teams, Reports, Settings (prototype UI)
+- In-memory demo data (no backend yet)
 
-A few resources to get you started if this is your first Flutter project:
+## Demo credentials
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+From `lib/state/app_store.dart`:
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+- **Player**: `player@gmail.com` / `Player@123`
+- **Admin**: `admin@gmail.com` / `Admin@123`
+
+## Run
+
+From the folder that contains `pubspec.yaml`:
+
+```bash
+flutter pub get
+flutter run
+```
+
+Web:
+
+```bash
+flutter run -d chrome
+```
+
+Admin-only entry:
+
+```bash
+flutter run -t lib/main_admin.dart
+```
+
+## Documentation
+
+See `PROJECT_STATUS.md` for a full “what’s built so far” snapshot.
