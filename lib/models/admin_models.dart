@@ -9,6 +9,7 @@ class AdminMatch {
   final String venue;
   final DateTime date;
   final MatchStatus status;
+  final bool flagged;
 
   const AdminMatch({
     required this.id,
@@ -19,6 +20,7 @@ class AdminMatch {
     required this.venue,
     required this.date,
     required this.status,
+    this.flagged = false,
   });
 
   AdminMatch copyWith({
@@ -30,6 +32,7 @@ class AdminMatch {
     String? venue,
     DateTime? date,
     MatchStatus? status,
+    bool? flagged,
   }) {
     return AdminMatch(
       id: id ?? this.id,
@@ -40,6 +43,7 @@ class AdminMatch {
       venue: venue ?? this.venue,
       date: date ?? this.date,
       status: status ?? this.status,
+      flagged: flagged ?? this.flagged,
     );
   }
 }

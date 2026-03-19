@@ -207,6 +207,14 @@ class AppStoreState extends State<AppStore> {
     });
   }
 
+  void flagMatch(String matchId, {String? reason}) {
+    final idx = _matches.indexWhere((m) => m.id == matchId);
+    if (idx == -1) return;
+    setState(() {
+      _matches[idx] = _matches[idx].copyWith(flagged: true);
+    });
+  }
+
   void updateTeam(AdminTeam updated) {
     final idx = _teams.indexWhere((t) => t.id == updated.id);
     if (idx == -1) return;

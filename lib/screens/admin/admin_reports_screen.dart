@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../models/admin_models.dart';
+import '../../state/app_store.dart';
 import '../../theme/app_theme.dart';
 
 class AdminReportsScreen extends StatefulWidget {
@@ -41,6 +43,8 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final store = AppStore.of(context);
+    final flaggedMatches = store.matches.where((m) => m.flagged).toList();
     final filtered = _items.where((e) {
       if (_filter == 1) return e.status == _Status.open;
       if (_filter == 2) return e.status == _Status.resolved;
@@ -57,6 +61,23 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          if (flaggedMatches.isNotEmpty) ...[
+            Text('Flagged matches', style: TextStyle(fontSize: 16, color: C.adminBlue, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 8),
+            ...flaggedMatches.map((match) => Container(
+              margin: const EdgeInsets.only(bottom: 10),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: C.white, borderRadius: BorderRadius.circular(12), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6)]),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(child: Text('${match.teamA} vs ${match.teamB}', style: const TextStyle(fontWeight: FontWeight.w600))),
+                  const Icon(Icons.flag, color: Colors.red, size: 18),
+                ],
+              ),
+            )),
+            const SizedBox(height: 16),
+          ],
           _filters(),
           const SizedBox(height: 12),
           ...filtered.map(_card),
