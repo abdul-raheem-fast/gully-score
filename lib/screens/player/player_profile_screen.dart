@@ -18,7 +18,7 @@ class PlayerProfileScreen extends StatelessWidget {
       body: CustomScrollView(
         physics: const BouncingScrollPhysics(),
         slivers: [
-          // ── Hero header ──────────────────────────────────────────
+          
           SliverToBoxAdapter(
             child: Container(
               width: double.infinity,

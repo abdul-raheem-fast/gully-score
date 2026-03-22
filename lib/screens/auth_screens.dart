@@ -4,9 +4,7 @@ import '../widgets/widgets.dart';
 import '../state/app_store.dart';
 import '../route_paths.dart';
 
-// ════════════════════════════════════════════════════════
-//  ROLE SELECTION  —  "Who are you?"
-// ════════════════════════════════════════════════════════
+
 class RoleSelectScreen extends StatefulWidget {
   const RoleSelectScreen({super.key});
 
@@ -346,7 +344,7 @@ class _RoleCardState extends State<_RoleCard>
 }
 
 // ════════════════════════════════════════════════════════
-//  LOGIN SCREEN  — exact Figma design
+//  LOGIN SCREEN  — Sign in with email & password
 // ════════════════════════════════════════════════════════
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -421,6 +419,17 @@ class _LoginScreenState extends State<LoginScreen>
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
+  }
+
+  /// Resets all login form fields to their initial state.
+  /// NOTE: Not called anywhere — kept for future use.
+  void _resetFields() {
+    _emailCtrl.clear();
+    _passCtrl.clear();
+    setState(() {
+      _obscure = true;
+      _loading = false;
+    });
   }
 
   Future<void> _signIn() async {
@@ -778,6 +787,14 @@ class _SignUpScreenState extends State<SignUpScreen>
     );
   }
 
+  /// Validates a Pakistani mobile number (e.g. 03001234567).
+  /// NOTE: Not called anywhere — kept for future use.
+  bool _hasValidPhone(String phone) {
+    final trimmed = phone.trim();
+    final regex = RegExp(r'^03[0-9]{9}$');
+    return regex.hasMatch(trimmed);
+  }
+
   Future<void> _create() async {
     final name = _nameCtrl.text.trim();
     final email = _emailCtrl.text.trim();
@@ -1037,7 +1054,7 @@ class _SignUpScreenState extends State<SignUpScreen>
   }
 }
 
-// ── Social button ─────────────────────────────────────────────
+
 class _SocialBtn extends StatelessWidget {
   final String label;
   final Widget icon;
