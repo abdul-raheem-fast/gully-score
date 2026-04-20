@@ -34,7 +34,7 @@ class AppStoreState extends State<AppStore> {
   bool isLoggedIn = false;
   String userName = '';
 
-  // ── Hardcoded demo users ─────────────────────────────────────
+
   // These allow login without registering.  Credentials:
   //   Player  →  player@gmail.com  /  Player@123
   //   Admin   →  admin@gmail.com   /  Admin@123
