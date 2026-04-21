@@ -7,7 +7,7 @@ import 'state/app_store.dart';
 
 /// Admin-only entry point (separate from the normal user app).
 ///
-/// Run this file when you want to boot the admin-focused navigation stack.
+
 ///
 /// Example (from CLI):
 ///   flutter run -t lib/main_admin.dart
