@@ -8,10 +8,7 @@ import 'state/app_store.dart';
 /// Admin-only entry point (separate from the normal user app).
 ///
 
-///
-/// Example (from CLI):
-///   flutter run -t lib/main_admin.dart
-///
+
 void main() {
   runApp(AppStore(child: const AdminApp()));
 }
