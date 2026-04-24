@@ -144,6 +144,8 @@ class AppStoreState extends State<AppStore> {
   List<AdminTeam> get teams => List.unmodifiable(_teams);
   List<AuthUser> get users => List.unmodifiable(_users);
 
+  String _normalizeEmail(String email) => email.trim().toLowerCase();
+
   void setRole(UserRole role) => setState(() => selectedRole = role);
 
   void login(String name) => setState(() {
@@ -157,11 +159,12 @@ class AppStoreState extends State<AppStore> {
     required String name,
     required UserRole role,
   }) {
+    final normalizedEmail = _normalizeEmail(email);
     final existingIndex = _users.indexWhere(
-      (u) => u.email.toLowerCase() == email.toLowerCase() && u.role == role,
+      (u) => _normalizeEmail(u.email) == normalizedEmail && u.role == role,
     );
     final user = AuthUser(
-      email: email.trim(),
+      email: normalizedEmail,
       password: password,
       name: name.trim(),
       role: role,
@@ -181,11 +184,12 @@ class AppStoreState extends State<AppStore> {
     required String password,
     required UserRole role,
   }) {
+    final normalizedEmail = _normalizeEmail(email);
     try {
       return _users.firstWhere(
         (u) =>
             u.role == role &&
-            u.email.toLowerCase() == email.trim().toLowerCase() &&
+            _normalizeEmail(u.email) == normalizedEmail &&
             u.password == password,
       );
     } catch (_) {
