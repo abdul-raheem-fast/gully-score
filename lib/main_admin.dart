@@ -5,10 +5,8 @@ import 'routes.dart';
 import 'theme/app_theme.dart';
 import 'state/app_store.dart';
 
-/// Admin-only entry point (separate from the normal user app).
-///
-
-
+/// Admin-only app entry point.
+/// Keeps admin routing/theme isolated from the player app.
 void main() {
   runApp(AppStore(child: const AdminApp()));
 }

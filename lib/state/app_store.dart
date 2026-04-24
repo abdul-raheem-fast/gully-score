@@ -34,8 +34,8 @@ class AppStoreState extends State<AppStore> {
   bool isLoggedIn = false;
   String userName = '';
 
-
-  // These allow login without registering.  Credentials:
+  // Demo accounts for local testing without registration.
+  // Credentials:
   //   Player  →  player@gmail.com  /  Player@123
   //   Admin   →  admin@gmail.com   /  Admin@123
   final List<AuthUser> _users = [
@@ -53,7 +53,7 @@ class AppStoreState extends State<AppStore> {
     ),
   ];
 
-  // In-memory demo data for admin screens.
+  // In-memory sample data used by admin screens.
   final List<AdminMatch> _matches = [
     AdminMatch(
       id: 'm1',
@@ -211,6 +211,7 @@ class AppStoreState extends State<AppStore> {
     final idx = _matches.indexWhere((m) => m.id == matchId);
     if (idx == -1) return;
     setState(() {
+      // Keep flagging simple for now; reason can be persisted later.
       _matches[idx] = _matches[idx].copyWith(flagged: true);
     });
   }
