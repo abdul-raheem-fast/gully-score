@@ -43,6 +43,69 @@ class SupabaseService {
     );
   }
 
+  static Future<void> upsertUserProfile({
+    required String userId,
+    required String email,
+    required String name,
+    required String role,
+    String? phone,
+    String? playingRole,
+    String? organization,
+  }) async {
+    await client.from('profiles').upsert({
+      'id': userId,
+      'email': email.trim().toLowerCase(),
+      'name': name.trim(),
+      'role': role,
+      'phone': phone?.trim(),
+      'playing_role': playingRole?.trim(),
+      'organization': organization?.trim(),
+      'updated_at': DateTime.now().toIso8601String(),
+    });
+  }
+
+  static Future<List<Map<String, dynamic>>> fetchProfiles() async {
+    final response = await client
+        .from('profiles')
+        .select()
+        .order('created_at', ascending: false);
+    return List<Map<String, dynamic>>.from(response);
+  }
+
+  static Future<List<Map<String, dynamic>>> fetchReports() async {
+    final response = await client
+        .from('reports')
+        .select()
+        .order('created_at', ascending: false);
+    return List<Map<String, dynamic>>.from(response);
+  }
+
+  static Future<void> createReport({
+    required String matchId,
+    required String title,
+    required String description,
+    String severity = 'medium',
+  }) async {
+    await client.from('reports').insert({
+      'match_id': matchId,
+      'title': title.trim(),
+      'description': description.trim(),
+      'severity': severity,
+      'status': 'open',
+      'created_by': currentUser?.id,
+    });
+  }
+
+  static Future<void> updateReportStatus({
+    required String reportId,
+    required String status,
+  }) async {
+    await client.from('reports').update({
+      'status': status,
+      'updated_at': DateTime.now().toIso8601String(),
+    }).eq('id', reportId);
+  }
+
   static Future<List<AdminMatch>> fetchAdminMatches() async {
     final response = await client
         .from('matches')

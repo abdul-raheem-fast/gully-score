@@ -724,6 +724,7 @@ class _SignUpScreenState extends State<SignUpScreen>
   final _nameCtrl  = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
+  final _orgCtrl = TextEditingController();
   final _passCtrl  = TextEditingController();
   String _playRole = 'Batsman';
   bool _loading = false;
@@ -757,6 +758,7 @@ class _SignUpScreenState extends State<SignUpScreen>
     _nameCtrl.dispose();
     _emailCtrl.dispose();
     _phoneCtrl.dispose();
+    _orgCtrl.dispose();
     _passCtrl.dispose();
     super.dispose();
   }
@@ -800,6 +802,8 @@ class _SignUpScreenState extends State<SignUpScreen>
   Future<void> _create() async {
     final name = _nameCtrl.text.trim();
     final email = _emailCtrl.text.trim();
+    final phone = _phoneCtrl.text.trim();
+    final organization = _orgCtrl.text.trim();
     final password = _passCtrl.text;
 
     if (name.isEmpty || email.isEmpty || password.isEmpty) {
@@ -826,6 +830,20 @@ class _SignUpScreenState extends State<SignUpScreen>
         name: name,
         role: _role.name,
       );
+      final userId = response.user?.id;
+      if (userId != null) {
+        await SupabaseService.upsertUserProfile(
+          userId: userId,
+          email: email,
+          name: name,
+          role: _role.name,
+          phone: phone.isEmpty ? null : phone,
+          playingRole: _role == UserRole.player ? _playRole : null,
+          organization: _role == UserRole.admin
+              ? (organization.isEmpty ? null : organization)
+              : null,
+        );
+      }
 
       if (!mounted) return;
       final requiresConfirmation = response.session == null;
@@ -1025,10 +1043,11 @@ class _SignUpScreenState extends State<SignUpScreen>
 
                   // Admin: org field
                   if (_role == UserRole.admin) ...[
-                    const AppField(
+                    AppField(
                         label: 'Organisation / Club Name',
                         hint: 'e.g. City Cricket Club',
-                        icon: Icons.business_outlined),
+                        icon: Icons.business_outlined,
+                        ctrl: _orgCtrl),
                     const SizedBox(height: 4),
                   ],
 

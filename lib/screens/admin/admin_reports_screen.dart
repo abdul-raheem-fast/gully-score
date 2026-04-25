@@ -15,50 +15,17 @@ class AdminReportsScreen extends StatefulWidget {
 class _AdminReportsScreenState extends State<AdminReportsScreen> {
   int _filter = 0; // 0=All, 1=Open, 2=Resolved
   Future<_BackendReportMetrics>? _metricsFuture;
-
-  final _items = <_ReportItem>[
-    _ReportItem(
-      id: 'RPT-247',
-      title: 'Match flagged for review',
-      subtitle: 'SS vs GW — suspicious extras count',
-      severity: _Severity.high,
-      status: _Status.open,
-      timeAgo: '3h ago',
-    ),
-    _ReportItem(
-      id: 'RPT-251',
-      title: 'User misconduct',
-      subtitle: 'Umpire report on player behavior',
-      severity: _Severity.medium,
-      status: _Status.open,
-      timeAgo: '6h ago',
-    ),
-    _ReportItem(
-      id: 'RPT-232',
-      title: 'Duplicate team created',
-      subtitle: 'Two teams with same name “Street Stars”',
-      severity: _Severity.low,
-      status: _Status.resolved,
-      timeAgo: '2d ago',
-    ),
-  ];
+  late Future<List<_ReportItem>> _reportsFuture;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     _metricsFuture ??= _loadMetrics(AppStore.of(context).matches);
+    _reportsFuture = _loadReports();
   }
 
   @override
   Widget build(BuildContext context) {
-    final store = AppStore.of(context);
-    final flaggedMatches = store.matches.where((m) => m.flagged).toList();
-    final filtered = _items.where((e) {
-      if (_filter == 1) return e.status == _Status.open;
-      if (_filter == 2) return e.status == _Status.resolved;
-      return true;
-    }).toList();
-
     return Scaffold(
       backgroundColor: C.bg,
       appBar: AppBar(
@@ -115,26 +82,32 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
               );
             },
           ),
-          if (flaggedMatches.isNotEmpty) ...[
-            Text('Flagged matches', style: TextStyle(fontSize: 16, color: C.adminBlue, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 8),
-            ...flaggedMatches.map((match) => Container(
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: C.white, borderRadius: BorderRadius.circular(12), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6)]),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(child: Text('${match.teamA} vs ${match.teamB}', style: const TextStyle(fontWeight: FontWeight.w600))),
-                  const Icon(Icons.flag, color: Colors.red, size: 18),
-                ],
-              ),
-            )),
-            const SizedBox(height: 16),
-          ],
           _filters(),
           const SizedBox(height: 12),
-          ...filtered.map(_card),
+          FutureBuilder<List<_ReportItem>>(
+            future: _reportsFuture,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              final data = snapshot.data ?? const <_ReportItem>[];
+              final filtered = data.where((e) {
+                if (_filter == 1) return e.status == _Status.open;
+                if (_filter == 2) return e.status == _Status.resolved;
+                return true;
+              }).toList();
+              if (filtered.isEmpty) {
+                return const Padding(
+                  padding: EdgeInsets.only(top: 20),
+                  child: Text(
+                    'No reports found',
+                    style: TextStyle(color: C.grey),
+                  ),
+                );
+              }
+              return Column(children: filtered.map(_card).toList());
+            },
+          ),
         ],
       ),
     );
@@ -221,7 +194,16 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
                 child: const Text('View'),
               ),
               TextButton(
-                onPressed: () {},
+                onPressed: () async {
+                  await SupabaseService.updateReportStatus(
+                    reportId: r.id,
+                    status: r.status == _Status.open ? 'resolved' : 'open',
+                  );
+                  if (!mounted) return;
+                  setState(() {
+                    _reportsFuture = _loadReports();
+                  });
+                },
                 style: TextButton.styleFrom(foregroundColor: r.status == _Status.open ? C.g2 : C.grey),
                 child: Text(r.status == _Status.open ? 'Resolve' : 'Resolved'),
               ),
@@ -256,6 +238,46 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
       inningsCount: innings.length,
       ballEventCount: eventsCount,
     );
+  }
+
+  Future<List<_ReportItem>> _loadReports() async {
+    final rows = await SupabaseService.fetchReports();
+    return rows.map((row) {
+      final createdAt = DateTime.tryParse(row['created_at']?.toString() ?? '');
+      return _ReportItem(
+        id: row['id']?.toString() ?? 'N/A',
+        title: (row['title'] as String?) ?? 'Report',
+        subtitle: (row['description'] as String?) ?? '',
+        severity: _severityFromDb((row['severity'] as String?) ?? 'medium'),
+        status: _statusFromDb((row['status'] as String?) ?? 'open'),
+        timeAgo: _timeAgo(createdAt),
+      );
+    }).toList();
+  }
+
+  _Severity _severityFromDb(String value) {
+    switch (value) {
+      case 'high':
+        return _Severity.high;
+      case 'low':
+        return _Severity.low;
+      default:
+        return _Severity.medium;
+    }
+  }
+
+  _Status _statusFromDb(String value) {
+    if (value == 'resolved') return _Status.resolved;
+    return _Status.open;
+  }
+
+  String _timeAgo(DateTime? dateTime) {
+    if (dateTime == null) return 'now';
+    final diff = DateTime.now().difference(dateTime);
+    if (diff.inDays > 0) return '${diff.inDays}d ago';
+    if (diff.inHours > 0) return '${diff.inHours}h ago';
+    if (diff.inMinutes > 0) return '${diff.inMinutes}m ago';
+    return 'now';
   }
 }
 

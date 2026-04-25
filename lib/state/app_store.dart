@@ -38,6 +38,8 @@ class AppStoreState extends State<AppStore> {
   String? matchesLoadError;
   bool isLoadingTeams = false;
   String? teamsLoadError;
+  bool isLoadingUsers = false;
+  String? usersLoadError;
 
   final List<AuthUser> _users = [];
 
@@ -144,6 +146,7 @@ class AppStoreState extends State<AppStore> {
     _hydrateAuthSession();
     _hydrateMatches();
     _hydrateTeams();
+    _hydrateUsers();
   }
 
   void _hydrateAuthSession() {
@@ -222,6 +225,42 @@ class AppStoreState extends State<AppStore> {
   }
 
   Future<void> refreshTeams() => _hydrateTeams();
+
+  Future<void> _hydrateUsers() async {
+    setState(() {
+      isLoadingUsers = true;
+      usersLoadError = null;
+    });
+    try {
+      final profiles = await SupabaseService.fetchProfiles();
+      if (!mounted) return;
+      final mapped = profiles.map((row) {
+        final roleRaw = row['role']?.toString();
+        final role = _userRoleFromString(roleRaw);
+        return AuthUser(
+          email: (row['email'] as String?) ?? '',
+          password: '',
+          name: (row['name'] as String?) ?? '',
+          role: role,
+        );
+      }).toList();
+      setState(() {
+        _users
+          ..clear()
+          ..addAll(mapped);
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        usersLoadError = 'Could not load users from backend.';
+      });
+    } finally {
+      if (!mounted) return;
+      setState(() => isLoadingUsers = false);
+    }
+  }
+
+  Future<void> refreshUsers() => _hydrateUsers();
 
   void setRole(UserRole role) => setState(() => selectedRole = role);
 
@@ -307,8 +346,21 @@ class AppStoreState extends State<AppStore> {
       // Keep flagging simple for now; reason can be persisted later.
       _matches[idx] = _matches[idx].copyWith(flagged: true);
     });
-    // The current schema does not store a flag field on matches.
-    // Flags are kept local until a moderation table is added.
+    try {
+      await SupabaseService.createReport(
+        matchId: matchId,
+        title: 'Match flagged for review',
+        description: reason?.trim().isEmpty ?? true
+            ? 'Flagged by admin for manual review.'
+            : reason!.trim(),
+        severity: 'high',
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        matchesLoadError = 'Flag saved locally. Backend report sync failed.';
+      });
+    }
   }
 
   void updateTeam(AdminTeam updated) {
