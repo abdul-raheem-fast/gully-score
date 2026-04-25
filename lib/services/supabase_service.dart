@@ -6,6 +6,42 @@ class SupabaseService {
   const SupabaseService._();
 
   static SupabaseClient get client => Supabase.instance.client;
+  static User? get currentUser => client.auth.currentUser;
+  static Session? get currentSession => client.auth.currentSession;
+
+  static String? getCurrentUserRole() =>
+      currentUser?.userMetadata?['role']?.toString();
+
+  static String? getCurrentUserName() =>
+      currentUser?.userMetadata?['name']?.toString();
+
+  static Future<void> signOut() => client.auth.signOut();
+
+  static Future<AuthResponse> signUpWithEmail({
+    required String email,
+    required String password,
+    required String name,
+    required String role,
+  }) {
+    return client.auth.signUp(
+      email: email.trim(),
+      password: password,
+      data: {
+        'name': name.trim(),
+        'role': role,
+      },
+    );
+  }
+
+  static Future<AuthResponse> signInWithEmail({
+    required String email,
+    required String password,
+  }) {
+    return client.auth.signInWithPassword(
+      email: email.trim(),
+      password: password,
+    );
+  }
 
   static Future<List<AdminMatch>> fetchAdminMatches() async {
     final response = await client

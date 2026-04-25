@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../models/admin_models.dart';
 import '../../models/player_models.dart';
 import '../../state/app_store.dart';
 import '../../theme/app_theme.dart';
@@ -196,65 +197,6 @@ class _DashboardTabState extends State<_DashboardTab>
   late Animation<double> _fade;
   late Animation<Offset> _slide;
 
-  // ── Static demo data ─────────────────────────────────────
-  static const _live = LiveMatch(
-    teamA: 'Street Stars',
-    teamAbbr: 'SS',
-    teamB: 'Gully Warriors',
-    teamBAbbr: 'GW',
-    scoreA: '142/6',
-    scoreB: '98/3',
-    oversA: '16.4 Overs',
-    oversB: '12.2 Overs',
-    targetOvers: '120',
-    chaseInfo: 'GW need 45 runs from 22 balls',
-  );
-
-  static final _recent = [
-    PlayerMatch(
-      id: 'p1',
-      myTeam: 'Street Stars',
-      myTeamAbbr: 'SS',
-      opponent: 'Night Kings',
-      opponentAbbr: 'NK',
-      myTeamScore: '185/4 (20 ov)',
-      opponentScore: '162/8 (20 ov)',
-      overs: '20',
-      result: MatchResult.won,
-      summary: 'Street Stars won by 23 runs',
-      date: DateTime(2026, 2, 27),
-      format: 'T20',
-    ),
-    PlayerMatch(
-      id: 'p2',
-      myTeam: 'Street Stars',
-      myTeamAbbr: 'SS',
-      opponent: 'City Champs',
-      opponentAbbr: 'CC',
-      myTeamScore: '98/10 (9.2 ov)',
-      opponentScore: '102/3 (10 ov)',
-      overs: '10',
-      result: MatchResult.lost,
-      summary: 'City Champs won by 7 wickets',
-      date: DateTime(2026, 2, 25),
-      format: '10-Over',
-    ),
-    PlayerMatch(
-      id: 'p3',
-      myTeam: 'Street Stars',
-      myTeamAbbr: 'SS',
-      opponent: 'Valley Victors',
-      opponentAbbr: 'VV',
-      myTeamScore: '167/5 (20 ov)',
-      opponentScore: '165/7 (20 ov)',
-      overs: '20',
-      result: MatchResult.won,
-      summary: 'Street Stars won by 2 runs',
-      date: DateTime(2026, 2, 20),
-      format: 'T20',
-    ),
-  ];
-
   @override
   void initState() {
     super.initState();
@@ -285,6 +227,8 @@ class _DashboardTabState extends State<_DashboardTab>
     final store = AppStore.of(context);
     final name = store.userName.isEmpty ? 'Player' : store.userName;
     final initials = name.trim().split(' ').map((w) => w[0]).take(2).join().toUpperCase();
+    final live = _deriveLiveMatch(store);
+    final recent = _deriveRecentMatches(store);
 
     return FadeTransition(
       opacity: _fade,
@@ -368,7 +312,7 @@ class _DashboardTabState extends State<_DashboardTab>
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 22, 20, 0),
-                child: _LiveMatchCard(match: _live),
+                child: _LiveMatchCard(match: live),
               ),
             ),
 
@@ -428,16 +372,85 @@ class _DashboardTabState extends State<_DashboardTab>
               delegate: SliverChildBuilderDelegate(
                 (context, i) => Padding(
                   padding: EdgeInsets.fromLTRB(
-                      20, 0, 20, i == _recent.length - 1 ? 24 : 12),
-                  child: _MatchCard(match: _recent[i]),
+                      20, 0, 20, i == recent.length - 1 ? 24 : 12),
+                  child: _MatchCard(match: recent[i]),
                 ),
-                childCount: _recent.length,
+                childCount: recent.length,
               ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  LiveMatch _deriveLiveMatch(AppStoreState store) {
+    final liveMatch = store.matches
+        .where((m) => m.status == MatchStatus.live)
+        .cast<AdminMatch>()
+        .toList();
+    if (liveMatch.isNotEmpty) {
+      final m = liveMatch.first;
+      return LiveMatch(
+        teamA: m.teamA,
+        teamAbbr: _abbr(m.teamA),
+        teamB: m.teamB,
+        teamBAbbr: _abbr(m.teamB),
+        scoreA: m.scoreA,
+        scoreB: m.scoreB,
+        oversA: 'Live',
+        oversB: 'Live',
+        targetOvers: 'TBD',
+        chaseInfo: '${m.teamA} vs ${m.teamB} in progress',
+      );
+    }
+    return const LiveMatch(
+      teamA: 'No Live Match',
+      teamAbbr: '--',
+      teamB: 'Check Back Soon',
+      teamBAbbr: '--',
+      scoreA: '0/0',
+      scoreB: '0/0',
+      oversA: '0.0 Overs',
+      oversB: '0.0 Overs',
+      targetOvers: 'TBD',
+      chaseInfo: 'No active match right now',
+    );
+  }
+
+  List<PlayerMatch> _deriveRecentMatches(AppStoreState store) {
+    final matches = store.matches.take(3).toList();
+    if (matches.isEmpty) return const [];
+    return matches.map((m) {
+      final result =
+          m.status == MatchStatus.completed ? MatchResult.won : MatchResult.draw;
+      return PlayerMatch(
+        id: m.id,
+        myTeam: m.teamA,
+        myTeamAbbr: _abbr(m.teamA),
+        opponent: m.teamB,
+        opponentAbbr: _abbr(m.teamB),
+        myTeamScore: m.scoreA,
+        opponentScore: m.scoreB,
+        overs: 'TBD',
+        result: result,
+        summary: '${m.teamA} vs ${m.teamB} at ${m.venue}',
+        date: m.date,
+        format: 'League',
+      );
+    }).toList();
+  }
+
+  String _abbr(String team) {
+    final words = team
+        .split(' ')
+        .where((word) => word.trim().isNotEmpty)
+        .take(2)
+        .map((word) => word[0].toUpperCase())
+        .join();
+    if (words.length >= 2) return words;
+    final cleaned = team.trim().toUpperCase();
+    return cleaned.length >= 2 ? cleaned.substring(0, 2) : cleaned;
   }
 
   SnackBar _snack(String msg) => SnackBar(

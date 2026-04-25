@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/app_theme.dart';
 import '../widgets/widgets.dart';
 import '../state/app_store.dart';
 import '../route_paths.dart';
+import '../services/supabase_service.dart';
 
 
 class RoleSelectScreen extends StatefulWidget {
@@ -401,7 +403,7 @@ class _LoginScreenState extends State<LoginScreen>
 
   bool _isValidEmail(String email) {
     final trimmed = email.trim();
-    final regex = RegExp(r'^[\w\.\-]+@gmail\.com$');
+    final regex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
     return regex.hasMatch(trimmed);
   }
 
@@ -442,7 +444,7 @@ class _LoginScreenState extends State<LoginScreen>
     }
 
     if (!_isValidEmail(email)) {
-      _showError('Email must be a valid Gmail address (e.g. user@gmail.com)');
+      _showError('Please enter a valid email address');
       return;
     }
 
@@ -452,36 +454,36 @@ class _LoginScreenState extends State<LoginScreen>
       return;
     }
 
-    final store = AppStore.of(context);
     setState(() => _loading = true);
-    await Future.delayed(const Duration(milliseconds: 600));
-
-    final user = store.authenticate(
-      email: email,
-      password: password,
-      role: _role,
-    );
-
-    if (!mounted) return;
-
-    setState(() => _loading = false);
-
-    if (user == null) {
-      final existsWithEmail = store.users.any(
-        (u) =>
-            u.role == _role &&
-            u.email.toLowerCase() == email.toLowerCase(),
+    try {
+      final response = await SupabaseService.signInWithEmail(
+        email: email,
+        password: password,
       );
-      if (existsWithEmail) {
-        _showError('Incorrect password, try again');
-      } else {
-        _showError('No account found with this email for $_roleLabel');
-      }
-      return;
-    }
 
-    store.login(user.name.isEmpty ? email : user.name);
-    Navigator.pushReplacementNamed(context, _targetAfterLogin);
+      final userRole = response.user?.userMetadata?['role']?.toString();
+      if (userRole != null && userRole != _role.name) {
+        _showError('This account is registered as $userRole, not $_roleLabel.');
+        setState(() => _loading = false);
+        return;
+      }
+
+      final name = response.user?.userMetadata?['name']?.toString();
+      if (!mounted) return;
+      final store = AppStore.of(context);
+      store.setRole(_role);
+      store.login((name == null || name.isEmpty) ? email : name);
+      setState(() => _loading = false);
+      Navigator.pushReplacementNamed(context, _targetAfterLogin);
+    } on AuthException catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      _showError(e.message);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      _showError('Sign in failed. Please check connection and try again.');
+    }
   }
 
   @override
@@ -767,7 +769,7 @@ class _SignUpScreenState extends State<SignUpScreen>
 
   bool _isValidEmail(String email) {
     final trimmed = email.trim();
-    final regex = RegExp(r'^[\w\.\-]+@gmail\.com$');
+    final regex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
     return regex.hasMatch(trimmed);
   }
 
@@ -806,7 +808,7 @@ class _SignUpScreenState extends State<SignUpScreen>
     }
 
     if (!_isValidEmail(email)) {
-      _showError('Email must be a valid Gmail address (e.g. user@gmail.com)');
+      _showError('Please enter a valid email address');
       return;
     }
 
@@ -816,23 +818,47 @@ class _SignUpScreenState extends State<SignUpScreen>
       return;
     }
 
-    final store = AppStore.of(context);
-
     setState(() => _loading = true);
-    await Future.delayed(const Duration(milliseconds: 700));
+    try {
+      final response = await SupabaseService.signUpWithEmail(
+        email: email,
+        password: password,
+        name: name,
+        role: _role.name,
+      );
 
-    if (!mounted) return;
+      if (!mounted) return;
+      final requiresConfirmation = response.session == null;
+      if (requiresConfirmation) {
+        setState(() => _loading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text(
+              'Account created. Please verify your email, then sign in.',
+            ),
+            backgroundColor: C.g2,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+        );
+        Navigator.pushReplacementNamed(context, RoutePaths.login, arguments: _role);
+        return;
+      }
 
-    store.registerUser(
-      email: email,
-      password: password,
-      name: name,
-      role: _role,
-    );
-
-    store.login(name);
-    setState(() => _loading = false);
-    Navigator.pushReplacementNamed(context, _targetAfterSignup);
+      final store = AppStore.of(context);
+      store.setRole(_role);
+      store.login(name);
+      setState(() => _loading = false);
+      Navigator.pushReplacementNamed(context, _targetAfterSignup);
+    } on AuthException catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      _showError(e.message);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      _showError('Sign up failed. Please check connection and try again.');
+    }
   }
 
   @override

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import '../../models/admin_models.dart';
 import '../../route_paths.dart';
+import '../../state/app_store.dart';
 import '../../theme/app_theme.dart';
 
 /// Admin dashboard — updated layout (Sprint 1+)
@@ -350,6 +352,16 @@ class _DashboardBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final store = AppStore.of(context);
+    final matches = store.matches;
+    final teams = store.teams;
+    final users = store.users;
+    final liveMatches =
+        matches.where((m) => m.status == MatchStatus.live).toList();
+    final recentMatches = matches.take(5).toList();
+    final topTeams = List<AdminTeam>.from(teams)
+      ..sort((a, b) => b.matchCount.compareTo(a.matchCount));
+
     return LayoutBuilder(
       builder: (context, c) {
         final w = c.maxWidth;
@@ -374,46 +386,46 @@ class _DashboardBody extends StatelessWidget {
                 children: [
                   _KpiCard(
                     title: 'Total users',
-                    value: '2,841',
-                    sub: '+12% this week',
+                    value: users.length.toString(),
+                    sub: 'Registered accounts',
                     accent: C.g2,
                     width: cardWidth,
                   ),
                   _KpiCard(
                     title: 'Matches\nplayed',
-                    value: '24',
-                    sub: '+3 today',
+                    value: matches.length.toString(),
+                    sub: 'From backend',
                     accent: C.g2,
                     width: cardWidth,
                   ),
                   _KpiCard(
                     title: 'Active teams',
-                    value: '186',
-                    sub: '+8 this month',
+                    value: teams.length.toString(),
+                    sub: 'Team records',
                     accent: C.g2,
                     width: cardWidth,
                   ),
                   _KpiCard(
                     title: 'Live matches',
-                    value: '3',
-                    sub: '2 ending soon',
+                    value: liveMatches.length.toString(),
+                    sub: 'Currently active',
                     accent: Colors.red.shade600,
                     width: cardWidth,
                   ),
                 ],
               ),
               const SizedBox(height: 18),
-              if (!twoCol) ...const [
-                _RecentMatchesCard(),
+              if (!twoCol) ...[
+                _RecentMatchesCard(matches: recentMatches),
                 SizedBox(height: 14),
-                _TopTeamsCard(),
+                _TopTeamsCard(teams: topTeams.take(5).toList()),
               ] else
-                const Row(
+                Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(child: _RecentMatchesCard()),
+                    Expanded(child: _RecentMatchesCard(matches: recentMatches)),
                     SizedBox(width: 14),
-                    Expanded(child: _TopTeamsCard()),
+                    Expanded(child: _TopTeamsCard(teams: topTeams.take(5).toList())),
                   ],
                 ),
               const SizedBox(height: 18),
@@ -616,7 +628,8 @@ class _KpiCard extends StatelessWidget {
 }
 
 class _RecentMatchesCard extends StatelessWidget {
-  const _RecentMatchesCard();
+  final List<AdminMatch> matches;
+  const _RecentMatchesCard({required this.matches});
 
   @override
   Widget build(BuildContext context) {
@@ -627,20 +640,21 @@ class _RecentMatchesCard extends StatelessWidget {
         child: const Text('See all'),
       ),
       child: Column(
-        children: const [
-          _MatchRow(teamA: 'Tigers', teamB: 'Lions', status: _RowStatus.live),
-          _MatchRow(teamA: 'Hawks', teamB: 'Bulls', status: _RowStatus.live),
-          _MatchRow(teamA: 'Stars', teamB: 'Rovers', status: _RowStatus.tomorrow),
-          _MatchRow(teamA: 'Kings', teamB: 'Riders', status: _RowStatus.done),
-          _MatchRow(teamA: 'Panthers', teamB: 'Wolves', status: _RowStatus.done),
-        ],
+        children: matches
+            .map((m) => _MatchRow(
+                  teamA: m.teamA,
+                  teamB: m.teamB,
+                  status: m.status,
+                ))
+            .toList(),
       ),
     );
   }
 }
 
 class _TopTeamsCard extends StatelessWidget {
-  const _TopTeamsCard();
+  final List<AdminTeam> teams;
+  const _TopTeamsCard({required this.teams});
 
   @override
   Widget build(BuildContext context) {
@@ -651,13 +665,14 @@ class _TopTeamsCard extends StatelessWidget {
         child: const Text('See all'),
       ),
       child: Column(
-        children: const [
-          _TeamRow(code: 'TG', name: 'Tigers', wins: '18W', color: Color(0xFF1A5C20)),
-          _TeamRow(code: 'LN', name: 'Lions', wins: '15W', color: Color(0xFF1A5C20)),
-          _TeamRow(code: 'HK', name: 'Hawks', wins: '13W', color: Color(0xFFFF6B00)),
-          _TeamRow(code: 'ST', name: 'Stars', wins: '11W', color: Color(0xFF7E57C2)),
-          _TeamRow(code: 'KG', name: 'Kings', wins: '9W', color: Color(0xFFE53935)),
-        ],
+        children: teams
+            .map((t) => _TeamRow(
+                  code: t.abbreviation,
+                  name: t.name,
+                  wins: '${t.matchCount}M',
+                  color: const Color(0xFF1A5C20),
+                ))
+            .toList(),
       ),
     );
   }
@@ -696,25 +711,23 @@ class _Panel extends StatelessWidget {
   }
 }
 
-enum _RowStatus { live, tomorrow, done }
-
 class _MatchRow extends StatelessWidget {
   final String teamA;
   final String teamB;
-  final _RowStatus status;
+  final MatchStatus status;
   const _MatchRow({required this.teamA, required this.teamB, required this.status});
 
   @override
   Widget build(BuildContext context) {
     final dotColor = switch (status) {
-      _RowStatus.live => const Color(0xFF2E7D32),
-      _RowStatus.tomorrow => C.orange,
-      _RowStatus.done => Colors.black.withOpacity(0.18),
+      MatchStatus.live => const Color(0xFF2E7D32),
+      MatchStatus.upcoming => C.orange,
+      MatchStatus.completed => Colors.black.withOpacity(0.18),
     };
     final chip = switch (status) {
-      _RowStatus.live => _pill('Live', const Color(0xFF2E7D32), const Color(0xFFE8F5E9)),
-      _RowStatus.tomorrow => _pill('Tomorrow', const Color(0xFFFF6B00), const Color(0xFFFFF3E0)),
-      _RowStatus.done => _pill('Done', const Color(0xFF757575), const Color(0xFFF1F3F4)),
+      MatchStatus.live => _pill('Live', const Color(0xFF2E7D32), const Color(0xFFE8F5E9)),
+      MatchStatus.upcoming => _pill('Upcoming', const Color(0xFFFF6B00), const Color(0xFFFFF3E0)),
+      MatchStatus.completed => _pill('Done', const Color(0xFF757575), const Color(0xFFF1F3F4)),
     };
 
     return Padding(

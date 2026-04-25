@@ -11,6 +11,12 @@ import 'config/supabase_config.dart';
 /// Keeps admin routing/theme isolated from the player app.
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (!SupabaseConfig.isConfigured) {
+    throw StateError(
+      'Supabase is not configured. Run with --dart-define=SUPABASE_URL=... '
+      'and --dart-define=SUPABASE_ANON_KEY=...',
+    );
+  }
   await Supabase.initialize(
     url: SupabaseConfig.url,
     anonKey: SupabaseConfig.anonKey,

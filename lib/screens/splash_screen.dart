@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import '../route_paths.dart';
+import '../services/supabase_service.dart';
 import '../theme/app_theme.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -65,7 +67,15 @@ class _SplashScreenState extends State<SplashScreen>
 
     // Keep reference so we can cancel in dispose (important for tests).
     _transitionTimer = Timer(const Duration(milliseconds: 3000), () {
-      if (mounted) Navigator.pushReplacementNamed(context, '/onboarding');
+      if (!mounted) return;
+      final user = SupabaseService.currentUser;
+      if (user == null) {
+        Navigator.pushReplacementNamed(context, RoutePaths.onboarding);
+        return;
+      }
+      final role = SupabaseService.getCurrentUserRole();
+      final target = role == 'admin' ? RoutePaths.admin : RoutePaths.home;
+      Navigator.pushReplacementNamed(context, target);
     });
   }
 

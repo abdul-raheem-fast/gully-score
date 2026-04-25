@@ -39,24 +39,7 @@ class AppStoreState extends State<AppStore> {
   bool isLoadingTeams = false;
   String? teamsLoadError;
 
-  // Demo accounts for local testing without registration.
-  // Credentials:
-  //   Player  →  player@gmail.com  /  Player@123
-  //   Admin   →  admin@gmail.com   /  Admin@123
-  final List<AuthUser> _users = [
-    const AuthUser(
-      email: 'player@gmail.com',
-      password: 'Player@123',
-      name: 'Babar Azam',
-      role: UserRole.player,
-    ),
-    const AuthUser(
-      email: 'admin@gmail.com',
-      password: 'Admin@123',
-      name: 'Demo Admin',
-      role: UserRole.admin,
-    ),
-  ];
+  final List<AuthUser> _users = [];
 
   // In-memory sample data used by admin screens.
   static final List<AdminMatch> _seedMatches = [
@@ -158,8 +141,34 @@ class AppStoreState extends State<AppStore> {
   @override
   void initState() {
     super.initState();
+    _hydrateAuthSession();
     _hydrateMatches();
     _hydrateTeams();
+  }
+
+  void _hydrateAuthSession() {
+    final user = SupabaseService.currentUser;
+    if (user == null) return;
+    final role = _userRoleFromString(
+      user.userMetadata?['role']?.toString(),
+    );
+    final name = user.userMetadata?['name']?.toString().trim();
+    setState(() {
+      isLoggedIn = true;
+      selectedRole = role;
+      userName = (name == null || name.isEmpty) ? user.email ?? '' : name;
+      if (user.email != null &&
+          !_users.any((u) => u.email.toLowerCase() == user.email!.toLowerCase())) {
+        _users.add(
+          AuthUser(
+            email: user.email!,
+            password: '',
+            name: userName,
+            role: selectedRole ?? UserRole.player,
+          ),
+        );
+      }
+    });
   }
 
   Future<void> _hydrateMatches() async {
@@ -265,11 +274,15 @@ class AppStoreState extends State<AppStore> {
     }
   }
 
-  void logout() => setState(() {
-        isLoggedIn = false;
-        userName = '';
-        selectedRole = null;
-      });
+  Future<void> logout() async {
+    await SupabaseService.signOut();
+    if (!mounted) return;
+    setState(() {
+      isLoggedIn = false;
+      userName = '';
+      selectedRole = null;
+    });
+  }
 
   Future<void> updateMatch(AdminMatch updated) async {
     final idx = _matches.indexWhere((m) => m.id == updated.id);
@@ -349,4 +362,9 @@ class AppStoreState extends State<AppStore> {
 
   @override
   Widget build(BuildContext context) => widget.child;
+
+  UserRole _userRoleFromString(String? role) {
+    if (role == UserRole.admin.name) return UserRole.admin;
+    return UserRole.player;
+  }
 }
