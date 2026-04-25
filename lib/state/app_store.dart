@@ -36,6 +36,8 @@ class AppStoreState extends State<AppStore> {
   String userName = '';
   bool isLoadingMatches = false;
   String? matchesLoadError;
+  bool isLoadingTeams = false;
+  String? teamsLoadError;
 
   // Demo accounts for local testing without registration.
   // Credentials:
@@ -102,7 +104,7 @@ class AppStoreState extends State<AppStore> {
 
   final List<AdminMatch> _matches = List<AdminMatch>.from(_seedMatches);
 
-  final List<AdminTeam> _teams = [
+  static const List<AdminTeam> _seedTeams = [
     const AdminTeam(
       id: 't1',
       name: 'Alpha Blasters',
@@ -145,6 +147,8 @@ class AppStoreState extends State<AppStore> {
     ),
   ];
 
+  final List<AdminTeam> _teams = List<AdminTeam>.from(_seedTeams);
+
   List<AdminMatch> get matches => List.unmodifiable(_matches);
   List<AdminTeam> get teams => List.unmodifiable(_teams);
   List<AuthUser> get users => List.unmodifiable(_users);
@@ -155,6 +159,7 @@ class AppStoreState extends State<AppStore> {
   void initState() {
     super.initState();
     _hydrateMatches();
+    _hydrateTeams();
   }
 
   Future<void> _hydrateMatches() async {
@@ -182,6 +187,32 @@ class AppStoreState extends State<AppStore> {
   }
 
   Future<void> refreshMatches() => _hydrateMatches();
+
+  Future<void> _hydrateTeams() async {
+    setState(() {
+      isLoadingTeams = true;
+      teamsLoadError = null;
+    });
+    try {
+      final remoteTeams = await SupabaseService.fetchAdminTeams();
+      if (!mounted) return;
+      setState(() {
+        _teams
+          ..clear()
+          ..addAll(remoteTeams.isEmpty ? _seedTeams : remoteTeams);
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        teamsLoadError = 'Using local teams while backend is unavailable.';
+      });
+    } finally {
+      if (!mounted) return;
+      setState(() => isLoadingTeams = false);
+    }
+  }
+
+  Future<void> refreshTeams() => _hydrateTeams();
 
   void setRole(UserRole role) => setState(() => selectedRole = role);
 
@@ -273,6 +304,47 @@ class AppStoreState extends State<AppStore> {
     setState(() {
       _teams[idx] = updated;
     });
+  }
+
+  Future<void> addPlayerToTeam({
+    required String teamName,
+    required String playerName,
+    bool isCaptain = false,
+  }) async {
+    final normalizedTeam = teamName.trim();
+    final normalizedPlayer = playerName.trim();
+    if (normalizedTeam.isEmpty || normalizedPlayer.isEmpty) return;
+
+    AdminMatch? relatedMatch;
+    for (final match in _matches) {
+      if (match.teamA == normalizedTeam || match.teamB == normalizedTeam) {
+        relatedMatch = match;
+        break;
+      }
+    }
+    relatedMatch ??= _matches.isNotEmpty ? _matches.first : null;
+
+    if (relatedMatch == null) {
+      setState(() {
+        teamsLoadError = 'No match found to attach this player.';
+      });
+      return;
+    }
+
+    try {
+      await SupabaseService.addPlayer(
+        matchId: relatedMatch.id,
+        teamName: normalizedTeam,
+        playerName: normalizedPlayer,
+        isCaptain: isCaptain,
+      );
+      await _hydrateTeams();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        teamsLoadError = 'Could not add player to backend.';
+      });
+    }
   }
 
   @override

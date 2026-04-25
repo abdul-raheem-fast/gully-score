@@ -34,6 +34,19 @@ class _AdminTeamsScreenState extends State<AdminTeamsScreen> {
         title: const Text('Teams'),
         backgroundColor: C.adminBlue,
         foregroundColor: C.white,
+        actions: [
+          IconButton(
+            onPressed: () async {
+              await store.refreshTeams();
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Teams refreshed')),
+              );
+            },
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh from backend',
+          ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(60),
           child: Padding(
@@ -48,15 +61,127 @@ class _AdminTeamsScreenState extends State<AdminTeamsScreen> {
           ),
         ),
       ),
-      body: ListView.separated(
-        padding: const EdgeInsets.all(16),
-        itemCount: teams.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 12),
-        itemBuilder: (context, index) {
-          final team = teams[index];
-          return _teamCard(context, team);
-        },
+      body: Column(
+        children: [
+          if (store.isLoadingTeams) const LinearProgressIndicator(minHeight: 2),
+          if (store.teamsLoadError != null)
+            Container(
+              width: double.infinity,
+              color: Colors.orange.shade50,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Text(
+                store.teamsLoadError!,
+                style: TextStyle(
+                  color: Colors.orange.shade800,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          Expanded(
+            child: ListView.separated(
+              padding: const EdgeInsets.all(16),
+              itemCount: teams.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              itemBuilder: (context, index) {
+                final team = teams[index];
+                return _teamCard(context, team);
+              },
+            ),
+          ),
+        ],
       ),
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: C.adminBlue,
+        foregroundColor: C.white,
+        onPressed: () => _showAddPlayerDialog(context, teams),
+        icon: const Icon(Icons.person_add_alt_1),
+        label: const Text('Add Player'),
+      ),
+    );
+  }
+
+  void _showAddPlayerDialog(BuildContext context, List<AdminTeam> teams) {
+    if (teams.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No teams available yet')),
+      );
+      return;
+    }
+    final store = AppStore.of(context);
+    final nameCtrl = TextEditingController();
+    String selectedTeam = teams.first.name;
+    bool isCaptain = false;
+
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Add player to team'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DropdownButtonFormField<String>(
+                    value: selectedTeam,
+                    items: teams
+                        .map(
+                          (team) => DropdownMenuItem(
+                            value: team.name,
+                            child: Text(team.name),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value == null) return;
+                      setDialogState(() => selectedTeam = value);
+                    },
+                    decoration: const InputDecoration(labelText: 'Team'),
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: nameCtrl,
+                    decoration: const InputDecoration(labelText: 'Player name'),
+                  ),
+                  const SizedBox(height: 10),
+                  CheckboxListTile(
+                    value: isCaptain,
+                    onChanged: (value) =>
+                        setDialogState(() => isCaptain = value ?? false),
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Set as captain'),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('Cancel'),
+                ),
+                TextButton(
+                  onPressed: () async {
+                    await store.addPlayerToTeam(
+                      teamName: selectedTeam,
+                      playerName: nameCtrl.text,
+                      isCaptain: isCaptain,
+                    );
+                    if (!dialogContext.mounted) return;
+                    Navigator.of(dialogContext).pop();
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Player synced with backend'),
+                      ),
+                    );
+                  },
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 

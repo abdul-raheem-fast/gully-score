@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../models/admin_models.dart';
+import '../../services/supabase_service.dart';
 import '../../state/app_store.dart';
 import '../../theme/app_theme.dart';
 
@@ -13,6 +14,7 @@ class AdminReportsScreen extends StatefulWidget {
 
 class _AdminReportsScreenState extends State<AdminReportsScreen> {
   int _filter = 0; // 0=All, 1=Open, 2=Resolved
+  Future<_BackendReportMetrics>? _metricsFuture;
 
   final _items = <_ReportItem>[
     _ReportItem(
@@ -42,6 +44,12 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
   ];
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _metricsFuture ??= _loadMetrics(AppStore.of(context).matches);
+  }
+
+  @override
   Widget build(BuildContext context) {
     final store = AppStore.of(context);
     final flaggedMatches = store.matches.where((m) => m.flagged).toList();
@@ -61,6 +69,52 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          FutureBuilder<_BackendReportMetrics>(
+            future: _metricsFuture,
+            builder: (context, snapshot) {
+              final metrics = snapshot.data;
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Padding(
+                  padding: EdgeInsets.only(bottom: 14),
+                  child: LinearProgressIndicator(minHeight: 2),
+                );
+              }
+              if (metrics == null) return const SizedBox.shrink();
+              return Container(
+                margin: const EdgeInsets.only(bottom: 14),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: C.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.04),
+                      blurRadius: 6,
+                    )
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _pill(
+                        'Innings: ${metrics.inningsCount}',
+                        C.gLight,
+                        C.g1,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _pill(
+                        'Ball Events: ${metrics.ballEventCount}',
+                        const Color(0xFFE3F2FD),
+                        C.adminBlue,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
           if (flaggedMatches.isNotEmpty) ...[
             Text('Flagged matches', style: TextStyle(fontSize: 16, color: C.adminBlue, fontWeight: FontWeight.w700)),
             const SizedBox(height: 8),
@@ -185,6 +239,24 @@ class _AdminReportsScreenState extends State<AdminReportsScreen> {
       child: Text(text, style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: fg)),
     );
   }
+
+  Future<_BackendReportMetrics> _loadMetrics(List<AdminMatch> matches) async {
+    if (matches.isEmpty) {
+      return const _BackendReportMetrics(inningsCount: 0, ballEventCount: 0);
+    }
+    final innings = await SupabaseService.fetchInnings(matches.first.id);
+    var eventsCount = 0;
+    for (final row in innings) {
+      final inningsId = row['id']?.toString();
+      if (inningsId == null || inningsId.isEmpty) continue;
+      final events = await SupabaseService.fetchBallEvents(inningsId);
+      eventsCount += events.length;
+    }
+    return _BackendReportMetrics(
+      inningsCount: innings.length,
+      ballEventCount: eventsCount,
+    );
+  }
 }
 
 enum _Severity { low, medium, high }
@@ -206,6 +278,16 @@ class _ReportItem {
     required this.severity,
     required this.status,
     required this.timeAgo,
+  });
+}
+
+class _BackendReportMetrics {
+  final int inningsCount;
+  final int ballEventCount;
+
+  const _BackendReportMetrics({
+    required this.inningsCount,
+    required this.ballEventCount,
   });
 }
 
