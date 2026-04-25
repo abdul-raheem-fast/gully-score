@@ -1,11 +1,20 @@
 import 'package:flutter/material.dart';
+import '../../models/admin_models.dart';
 import '../../models/player_models.dart';
+import '../../services/supabase_service.dart';
 import '../../theme/app_theme.dart';
 
-class PlayerMatchesScreen extends StatelessWidget {
+class PlayerMatchesScreen extends StatefulWidget {
   const PlayerMatchesScreen({super.key});
 
-  static final _matches = [
+  @override
+  State<PlayerMatchesScreen> createState() => _PlayerMatchesScreenState();
+}
+
+class _PlayerMatchesScreenState extends State<PlayerMatchesScreen> {
+  late final Future<List<PlayerMatch>> _matchesFuture = _loadMatches();
+
+  static final _fallbackMatches = [
     PlayerMatch(
       id: 'p1',
       myTeam: 'Street Stars',
@@ -78,59 +87,103 @@ class PlayerMatchesScreen extends StatelessWidget {
     ),
   ];
 
+  Future<List<PlayerMatch>> _loadMatches() async {
+    try {
+      final adminMatches = await SupabaseService.fetchAdminMatches();
+      if (adminMatches.isEmpty) return _fallbackMatches;
+      return adminMatches.map((m) {
+        final result =
+            m.status == MatchStatus.completed ? MatchResult.won : MatchResult.draw;
+        return PlayerMatch(
+          id: m.id,
+          myTeam: m.teamA,
+          myTeamAbbr: _abbr(m.teamA),
+          opponent: m.teamB,
+          opponentAbbr: _abbr(m.teamB),
+          myTeamScore: m.scoreA,
+          opponentScore: m.scoreB,
+          overs: 'TBD',
+          result: result,
+          summary: '${m.teamA} vs ${m.teamB} · ${m.venue}',
+          date: m.date,
+          format: 'League',
+        );
+      }).toList();
+    } catch (_) {
+      return _fallbackMatches;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final won = _matches.where((m) => m.result == MatchResult.won).length;
-    final lost = _matches.where((m) => m.result == MatchResult.lost).length;
+    return FutureBuilder<List<PlayerMatch>>(
+      future: _matchesFuture,
+      builder: (context, snapshot) {
+        final matches = snapshot.data ?? _fallbackMatches;
+        final won = matches.where((m) => m.result == MatchResult.won).length;
+        final lost = matches.where((m) => m.result == MatchResult.lost).length;
 
-    return Scaffold(
-      backgroundColor: C.bg,
-      body: CustomScrollView(
-        physics: const BouncingScrollPhysics(),
-        slivers: [
-          // Header
-          SliverAppBar(
-            pinned: true,
-            backgroundColor: C.white,
-            elevation: 0,
-            surfaceTintColor: C.white,
-            expandedHeight: 110,
-            automaticallyImplyLeading: false,
-            flexibleSpace: FlexibleSpaceBar(
-              titlePadding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
-              title: Column(
-                mainAxisAlignment: MainAxisAlignment.end,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Matches',
-                      style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                          color: C.dark)),
-                  Text('${_matches.length} played  •  $won won  •  $lost lost',
-                      style: const TextStyle(
-                          fontSize: 11, color: C.grey, fontWeight: FontWeight.w400)),
-                ],
-              ),
-            ),
-          ),
-
-          // Match list
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-            sliver: SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (ctx, i) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: _MatchTile(match: _matches[i]),
+        return Scaffold(
+          backgroundColor: C.bg,
+          body: CustomScrollView(
+            physics: const BouncingScrollPhysics(),
+            slivers: [
+              SliverAppBar(
+                pinned: true,
+                backgroundColor: C.white,
+                elevation: 0,
+                surfaceTintColor: C.white,
+                expandedHeight: 110,
+                automaticallyImplyLeading: false,
+                flexibleSpace: FlexibleSpaceBar(
+                  titlePadding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
+                  title: Column(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Matches',
+                          style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              color: C.dark)),
+                      Text('${matches.length} played  •  $won won  •  $lost lost',
+                          style: const TextStyle(
+                              fontSize: 11,
+                              color: C.grey,
+                              fontWeight: FontWeight.w400)),
+                    ],
+                  ),
                 ),
-                childCount: _matches.length,
               ),
-            ),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (ctx, i) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _MatchTile(match: matches[i]),
+                    ),
+                    childCount: matches.length,
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
+  }
+
+  String _abbr(String team) {
+    final words = team
+        .split(' ')
+        .where((word) => word.trim().isNotEmpty)
+        .take(2)
+        .map((word) => word[0].toUpperCase())
+        .join();
+    if (words.length >= 2) return words;
+    final cleaned = team.trim().toUpperCase();
+    return cleaned.length >= 2 ? cleaned.substring(0, 2) : cleaned;
   }
 }
 

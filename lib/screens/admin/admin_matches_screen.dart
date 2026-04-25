@@ -103,7 +103,7 @@ class _AdminMatchesScreenState extends State<AdminMatchesScreen> {
           actions: [
             TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
             TextButton(
-              onPressed: () {
+              onPressed: () async {
                 final newTeamA = teamACtrl.text.trim();
                 final newTeamB = teamBCtrl.text.trim();
                 final newScoreA = scoreACtrl.text.trim();
@@ -126,7 +126,7 @@ class _AdminMatchesScreenState extends State<AdminMatchesScreen> {
                   status: selectedStatus,
                 );
 
-                store.updateMatch(updated);
+                await store.updateMatch(updated);
 
                 final existingTeamA = store.teams.where((t) => t.name == match.teamA).toList();
                 if (existingTeamA.isNotEmpty && existingTeamA.first.name != newTeamA) {
@@ -138,6 +138,7 @@ class _AdminMatchesScreenState extends State<AdminMatchesScreen> {
                   store.updateTeam(existingTeamB.first.copyWith(name: newTeamB, abbreviation: _getAbbreviation(newTeamB)));
                 }
 
+                if (!context.mounted) return;
                 Navigator.of(context).pop();
                 setState(() {}); // Force rebuild after edit
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -184,8 +185,9 @@ class _AdminMatchesScreenState extends State<AdminMatchesScreen> {
           actions: [
             TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
             TextButton(
-              onPressed: () {
-                store.flagMatch(match.id, reason: reasonCtrl.text.trim());
+              onPressed: () async {
+                await store.flagMatch(match.id, reason: reasonCtrl.text.trim());
+                if (!context.mounted) return;
                 Navigator.of(context).pop();
                 setState(() {}); // Force rebuild after flag
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -213,6 +215,19 @@ class _AdminMatchesScreenState extends State<AdminMatchesScreen> {
           title: const Text('Matches'),
           backgroundColor: C.adminBlue,
           foregroundColor: C.white,
+          actions: [
+            IconButton(
+              onPressed: () async {
+                await store.refreshMatches();
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Matches refreshed')),
+                );
+              },
+              icon: const Icon(Icons.refresh),
+              tooltip: 'Refresh from backend',
+            ),
+          ],
           bottom: const TabBar(
             indicatorColor: C.white,
             indicatorWeight: 3,
@@ -224,12 +239,34 @@ class _AdminMatchesScreenState extends State<AdminMatchesScreen> {
             ],
           ),
         ),
-        body: TabBarView(
+        body: Column(
           children: [
-            _matchList(context, matches, null),
-            _matchList(context, matches, MatchStatus.live),
-            _matchList(context, matches, MatchStatus.upcoming),
-            _matchList(context, matches, MatchStatus.completed),
+            if (store.isLoadingMatches)
+              const LinearProgressIndicator(minHeight: 2),
+            if (store.matchesLoadError != null)
+              Container(
+                width: double.infinity,
+                color: Colors.orange.shade50,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Text(
+                  store.matchesLoadError!,
+                  style: TextStyle(
+                    color: Colors.orange.shade800,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            Expanded(
+              child: TabBarView(
+                children: [
+                  _matchList(context, matches, null),
+                  _matchList(context, matches, MatchStatus.live),
+                  _matchList(context, matches, MatchStatus.upcoming),
+                  _matchList(context, matches, MatchStatus.completed),
+                ],
+              ),
+            ),
           ],
         ),
       ),

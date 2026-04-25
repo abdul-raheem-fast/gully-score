@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/admin_models.dart';
+import '../services/supabase_service.dart';
 
 enum UserRole { admin, player }
 
@@ -33,6 +34,8 @@ class AppStoreState extends State<AppStore> {
   UserRole? selectedRole;
   bool isLoggedIn = false;
   String userName = '';
+  bool isLoadingMatches = false;
+  String? matchesLoadError;
 
   // Demo accounts for local testing without registration.
   // Credentials:
@@ -54,7 +57,7 @@ class AppStoreState extends State<AppStore> {
   ];
 
   // In-memory sample data used by admin screens.
-  final List<AdminMatch> _matches = [
+  static final List<AdminMatch> _seedMatches = [
     AdminMatch(
       id: 'm1',
       teamA: 'Alpha Blasters',
@@ -96,6 +99,8 @@ class AppStoreState extends State<AppStore> {
       status: MatchStatus.upcoming,
     ),
   ];
+
+  final List<AdminMatch> _matches = List<AdminMatch>.from(_seedMatches);
 
   final List<AdminTeam> _teams = [
     const AdminTeam(
@@ -145,6 +150,38 @@ class AppStoreState extends State<AppStore> {
   List<AuthUser> get users => List.unmodifiable(_users);
 
   String _normalizeEmail(String email) => email.trim().toLowerCase();
+
+  @override
+  void initState() {
+    super.initState();
+    _hydrateMatches();
+  }
+
+  Future<void> _hydrateMatches() async {
+    setState(() {
+      isLoadingMatches = true;
+      matchesLoadError = null;
+    });
+    try {
+      final remoteMatches = await SupabaseService.fetchAdminMatches();
+      if (!mounted) return;
+      setState(() {
+        _matches
+          ..clear()
+          ..addAll(remoteMatches.isEmpty ? _seedMatches : remoteMatches);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        matchesLoadError = 'Using local data while backend is unavailable.';
+      });
+    } finally {
+      if (!mounted) return;
+      setState(() => isLoadingMatches = false);
+    }
+  }
+
+  Future<void> refreshMatches() => _hydrateMatches();
 
   void setRole(UserRole role) => setState(() => selectedRole = role);
 
@@ -203,21 +240,31 @@ class AppStoreState extends State<AppStore> {
         selectedRole = null;
       });
 
-  void updateMatch(AdminMatch updated) {
+  Future<void> updateMatch(AdminMatch updated) async {
     final idx = _matches.indexWhere((m) => m.id == updated.id);
     if (idx == -1) return;
     setState(() {
       _matches[idx] = updated;
     });
+    try {
+      await SupabaseService.updateAdminMatch(updated);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        matchesLoadError = 'Match saved locally. Backend sync failed.';
+      });
+    }
   }
 
-  void flagMatch(String matchId, {String? reason}) {
+  Future<void> flagMatch(String matchId, {String? reason}) async {
     final idx = _matches.indexWhere((m) => m.id == matchId);
     if (idx == -1) return;
     setState(() {
       // Keep flagging simple for now; reason can be persisted later.
       _matches[idx] = _matches[idx].copyWith(flagged: true);
     });
+    // The current schema does not store a flag field on matches.
+    // Flags are kept local until a moderation table is added.
   }
 
   void updateTeam(AdminTeam updated) {
