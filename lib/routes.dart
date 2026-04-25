@@ -4,6 +4,7 @@ import 'route_paths.dart';
 
 import 'screens/admin/admin_dashboard_screen.dart';
 import 'screens/admin/admin_matches_screen.dart';
+import 'screens/admin/admin_profile_screen.dart';
 import 'screens/admin/admin_reports_screen.dart';
 import 'screens/admin/admin_settings_screen.dart';
 import 'screens/admin/admin_teams_screen.dart';
@@ -44,6 +45,7 @@ class AppRoutes {
         RoutePaths.admin: (_) => const AdminDashboardScreen(),
         RoutePaths.adminUsers: (_) => const AdminUsersScreen(),
         RoutePaths.adminMatches: (_) => const AdminMatchesScreen(),
+        RoutePaths.adminProfile: (_) => const AdminProfileScreen(),
         RoutePaths.adminTeams: (_) => const AdminTeamsScreen(),
         RoutePaths.adminReports: (_) => const AdminReportsScreen(),
         RoutePaths.adminSettings: (_) => const AdminSettingsScreen(),

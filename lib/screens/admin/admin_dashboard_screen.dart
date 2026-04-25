@@ -520,12 +520,7 @@ class _TopBar extends StatelessWidget {
             ),
             const SizedBox(width: 10),
             _avatar(
-              onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Profile screen coming soon'),
-                  behavior: SnackBarBehavior.floating,
-                ),
-              ),
+              onTap: () => Navigator.pushNamed(context, RoutePaths.adminProfile),
             ),
           ],
         );

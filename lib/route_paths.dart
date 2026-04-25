@@ -13,4 +13,5 @@ class RoutePaths {
   static const adminTeams = '/admin/teams';
   static const adminReports = '/admin/reports';
   static const adminSettings = '/admin/settings';
+  static const adminProfile = '/admin/profile';
 }
