@@ -164,17 +164,18 @@ class _RoleSelectScreenState extends State<RoleSelectScreen>
                           ),
                           const SizedBox(height: 14),
 
-                          // Create Account
-                          AppButton(
-                            label: 'Create Account',
-                            onTap: () => _go('/signup'),
-                            outline: true,
-                            color: _selected == UserRole.admin
-                                ? C.adminBlue
-                                : C.g1,
-                          ),
-
-                          const SizedBox(height: 36),
+                          if (_selected == UserRole.player) ...[
+                            // Create Account
+                            AppButton(
+                              label: 'Create Account',
+                              onTap: () => _go('/signup'),
+                              outline: true,
+                              color: C.g1,
+                            ),
+                            const SizedBox(height: 36),
+                          ] else ...[
+                            const SizedBox(height: 4),
+                          ]
                         ],
                       ),
                     ),
@@ -674,29 +675,30 @@ class _LoginScreenState extends State<LoginScreen>
                   const SizedBox(height: 32),
 
                   // Sign Up link
-                  Center(
-                    child: GestureDetector(
-                      onTap: () => Navigator.pushReplacementNamed(
-                          context, '/signup',
-                          arguments: _role),
-                      child: RichText(
-                        text: TextSpan(children: [
-                          const TextSpan(
-                            text: "Don't have an account? ",
-                            style:
-                                TextStyle(color: C.grey, fontSize: 14),
-                          ),
-                          TextSpan(
-                            text: 'Sign Up',
-                            style: TextStyle(
-                                color: _c,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 14),
-                          ),
-                        ]),
+                  if (_role != UserRole.admin)
+                    Center(
+                      child: GestureDetector(
+                        onTap: () => Navigator.pushReplacementNamed(
+                            context, '/signup',
+                            arguments: _role),
+                        child: RichText(
+                          text: TextSpan(children: [
+                            const TextSpan(
+                              text: "Don't have an account? ",
+                              style:
+                                  TextStyle(color: C.grey, fontSize: 14),
+                            ),
+                            TextSpan(
+                              text: 'Sign Up',
+                              style: TextStyle(
+                                  color: _c,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14),
+                            ),
+                          ]),
+                        ),
                       ),
                     ),
-                  ),
 
                   const SizedBox(height: 24),
                 ],
@@ -1053,14 +1055,36 @@ class _SignUpScreenState extends State<SignUpScreen>
 
                   const SizedBox(height: 24),
 
-                  _loading
-                      ? Center(
-                          child: CircularProgressIndicator(color: _c))
-                      : AppButton(
-                          label: 'Create Account',
-                          onTap: _create,
-                          color: _c,
+                  if (_role == UserRole.admin)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 18,
+                        vertical: 14,
+                      ),
+                      decoration: BoxDecoration(
+                        color: C.gLight,
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Text(
+                        'Admin account creation is not available. Please sign in instead.',
+                        style: TextStyle(
+                          color: C.grey,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
                         ),
+                        textAlign: TextAlign.center,
+                      ),
+                    )
+                  else
+                    _loading
+                        ? Center(
+                            child: CircularProgressIndicator(color: _c))
+                        : AppButton(
+                            label: 'Create Account',
+                            onTap: _create,
+                            color: _c,
+                          ),
 
                   const SizedBox(height: 20),
 
