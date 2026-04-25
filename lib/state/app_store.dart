@@ -153,7 +153,7 @@ class AppStoreState extends State<AppStore> {
     final user = SupabaseService.currentUser;
     if (user == null) return;
     final role = _userRoleFromString(
-      user.userMetadata?['role']?.toString(),
+      user.userMetadata?['app_role']?.toString(),
     );
     final name = user.userMetadata?['name']?.toString().trim();
     setState(() {

@@ -461,7 +461,7 @@ class _LoginScreenState extends State<LoginScreen>
         password: password,
       );
 
-      final userRole = response.user?.userMetadata?['role']?.toString();
+      final userRole = response.user?.userMetadata?['app_role']?.toString();
       if (userRole != null && userRole != _role.name) {
         _showError('This account is registered as $userRole, not $_roleLabel.');
         setState(() => _loading = false);
@@ -828,7 +828,7 @@ class _SignUpScreenState extends State<SignUpScreen>
         email: email,
         password: password,
         name: name,
-        role: _role.name,
+        appRole: _role.name,
       );
       final userId = response.user?.id;
       if (userId != null) {

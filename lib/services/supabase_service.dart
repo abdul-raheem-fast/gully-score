@@ -10,7 +10,7 @@ class SupabaseService {
   static Session? get currentSession => client.auth.currentSession;
 
   static String? getCurrentUserRole() =>
-      currentUser?.userMetadata?['role']?.toString();
+      currentUser?.userMetadata?['app_role']?.toString();
 
   static String? getCurrentUserName() =>
       currentUser?.userMetadata?['name']?.toString();
@@ -21,14 +21,14 @@ class SupabaseService {
     required String email,
     required String password,
     required String name,
-    required String role,
+    required String appRole,
   }) {
     return client.auth.signUp(
       email: email.trim(),
       password: password,
       data: {
         'name': name.trim(),
-        'role': role,
+        'app_role': appRole,
       },
     );
   }
