@@ -84,7 +84,6 @@ class PlayerStatsScreen extends StatelessWidget {
             ),
           ),
 
-          // Bowling section
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
