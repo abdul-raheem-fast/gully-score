@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import '../../models/player_models.dart';
 import '../../state/app_store.dart';
 import '../../theme/app_theme.dart';
 import '../../route_paths.dart';
+import '../../services/supabase_service.dart';
 
 class PlayerProfileScreen extends StatelessWidget {
   const PlayerProfileScreen({super.key});
@@ -18,7 +20,6 @@ class PlayerProfileScreen extends StatelessWidget {
       body: CustomScrollView(
         physics: const BouncingScrollPhysics(),
         slivers: [
-          
           SliverToBoxAdapter(
             child: Container(
               width: double.infinity,
@@ -31,7 +32,6 @@ class PlayerProfileScreen extends StatelessWidget {
                 ),
               ),
               child: Column(children: [
-                // Avatar with glow ring
                 Container(
                   width: 96,
                   height: 96,
@@ -68,25 +68,17 @@ class PlayerProfileScreen extends StatelessWidget {
                         fontWeight: FontWeight.w800,
                         letterSpacing: 0.3)),
                 const SizedBox(height: 6),
-                // Stats row
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     _statBadge('🏏', 'Batsman'),
                     const SizedBox(width: 10),
-                    Container(
-                        width: 1, height: 14, color: Colors.white30),
-                    const SizedBox(width: 10),
-                    _statBadge('⭐', 'Street Stars'),
-                    const SizedBox(width: 10),
-                    Container(
-                        width: 1, height: 14, color: Colors.white30),
+                    Container(width: 1, height: 14, color: Colors.white30),
                     const SizedBox(width: 10),
                     _statBadge('📍', 'Lahore'),
                   ],
                 ),
                 const SizedBox(height: 20),
-                // Quick stat pills
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
@@ -100,7 +92,6 @@ class PlayerProfileScreen extends StatelessWidget {
             ),
           ),
 
-          // ── Profile info tiles ────────────────────────────────────
           SliverPadding(
             padding: const EdgeInsets.all(20),
             sliver: SliverList(
@@ -112,12 +103,15 @@ class PlayerProfileScreen extends StatelessWidget {
                 ]),
                 const SizedBox(height: 16),
                 _section(context, 'Cricket Profile', [
-                  _tile(Icons.sports_cricket_outlined, 'Playing Role',
-                      'Batsman'),
-                  _tile(Icons.groups_2_outlined, 'Team', 'Street Stars'),
+                  _tile(Icons.sports_cricket_outlined, 'Playing Role', 'Batsman'),
                   _tile(Icons.emoji_events_outlined, 'Jersey No.', '#10'),
                   _tile(Icons.location_on_outlined, 'City', 'Lahore, Pakistan'),
                 ]),
+                const SizedBox(height: 16),
+
+                // ── My Teams Section ──────────────────────────────────
+                _MyTeamsSection(),
+
                 const SizedBox(height: 16),
                 _section(context, 'General', [
                   _tile(Icons.notifications_outlined, 'Notifications', 'On'),
@@ -126,7 +120,6 @@ class PlayerProfileScreen extends StatelessWidget {
                 ]),
                 const SizedBox(height: 24),
 
-                // ── Edit Profile button ──────────────────────────
                 _HoverButton(
                   onTap: () {},
                   filled: true,
@@ -144,13 +137,10 @@ class PlayerProfileScreen extends StatelessWidget {
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 12),
-
-                // ── Logout button ──────────────────────────────
                 _HoverButton(
                   onTap: () {
-                    store.logout();
+                    AppStore.of(context).logout();
                     Navigator.pushReplacementNamed(
                         context, RoutePaths.roleSelect);
                   },
@@ -170,7 +160,6 @@ class PlayerProfileScreen extends StatelessWidget {
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 36),
               ]),
             ),
@@ -196,8 +185,7 @@ class PlayerProfileScreen extends StatelessWidget {
           style: const TextStyle(
               color: C.white, fontSize: 20, fontWeight: FontWeight.w800)),
       const SizedBox(height: 2),
-      Text(label,
-          style: const TextStyle(color: Colors.white60, fontSize: 11)),
+      Text(label, style: const TextStyle(color: Colors.white60, fontSize: 11)),
     ]);
   }
 
@@ -230,6 +218,464 @@ class PlayerProfileScreen extends StatelessWidget {
 
   Widget _tile(IconData icon, String label, String value) {
     return _HoverTile(icon: icon, label: label, value: value);
+  }
+}
+
+// ── My Teams Section ─────────────────────────────────────────────
+class _MyTeamsSection extends StatefulWidget {
+  @override
+  State<_MyTeamsSection> createState() => _MyTeamsSectionState();
+}
+
+class _MyTeamsSectionState extends State<_MyTeamsSection> {
+  bool _showBrowser = false;
+  List<TeamInfo> _allTeams = [];
+  bool _loadingTeams = false;
+  String? _teamError;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAllTeams();
+  }
+
+  Future<void> _loadAllTeams() async {
+    setState(() {
+      _loadingTeams = true;
+      _teamError = null;
+    });
+    try {
+      final teams = await SupabaseService.fetchTeams();
+      if (!mounted) return;
+      // Fallback: map from store's AdminTeam list if empty
+      if (teams.isEmpty && mounted) {
+        final store = AppStore.of(context);
+        final fallback = store.teams
+            .map((t) => TeamInfo(
+                  id: t.id,
+                  name: t.name,
+                  abbreviation: t.abbreviation,
+                  captain: t.captain,
+                  playerCount: t.playerCount,
+                  matchCount: t.matchCount,
+                ))
+            .toList();
+        setState(() => _allTeams = fallback);
+      } else {
+        setState(() => _allTeams = teams);
+      }
+    } catch (_) {
+      if (!mounted) return;
+      // Use local seed as fallback
+      final store = AppStore.of(context);
+      final fallback = store.teams
+          .map((t) => TeamInfo(
+                id: t.id,
+                name: t.name,
+                abbreviation: t.abbreviation,
+                captain: t.captain,
+                playerCount: t.playerCount,
+                matchCount: t.matchCount,
+              ))
+          .toList();
+      setState(() {
+        _allTeams = fallback;
+        _teamError = _allTeams.isEmpty ? 'Could not load teams.' : null;
+      });
+    } finally {
+      if (mounted) setState(() => _loadingTeams = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final store = AppStore.of(context);
+    final memberships = store.myMemberships;
+    final myTeams =
+        memberships.where((m) => m.status == MembershipStatus.approved).toList();
+    final pending =
+        memberships.where((m) => m.status == MembershipStatus.pending).toList();
+
+    return Container(
+      decoration: BoxDecoration(
+        color: C.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withAlpha(10),
+              blurRadius: 10,
+              offset: const Offset(0, 3)),
+        ],
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        // Header row
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 12, 6),
+          child: Row(
+            children: [
+              const Expanded(
+                child: Text('MY TEAMS',
+                    style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        color: C.grey,
+                        letterSpacing: 1.1)),
+              ),
+              if (store.isLoadingMemberships)
+                const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2)),
+              const SizedBox(width: 8),
+              _SmallButton(
+                label: _showBrowser ? 'Hide Teams' : 'Browse Teams',
+                icon: _showBrowser ? Icons.close : Icons.search,
+                onTap: () => setState(() => _showBrowser = !_showBrowser),
+              ),
+            ],
+          ),
+        ),
+
+        if (store.membershipsLoadError != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text(store.membershipsLoadError!,
+                style:
+                    const TextStyle(color: Colors.red, fontSize: 12)),
+          ),
+
+        // ── Approved teams ──
+        if (myTeams.isEmpty && pending.isEmpty && !store.isLoadingMemberships)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+            child: Row(children: const [
+              Icon(Icons.groups_2_outlined, color: C.hint, size: 18),
+              SizedBox(width: 8),
+              Text('Not part of any team yet.',
+                  style: TextStyle(color: C.grey, fontSize: 13)),
+            ]),
+          ),
+
+        ...myTeams.map((m) => _MembershipTile(membership: m)),
+
+        // ── Pending applications ──
+        if (pending.isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+            child: Text('PENDING APPLICATIONS',
+                style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: C.hint,
+                    letterSpacing: 1)),
+          ),
+          ...pending.map((m) => _MembershipTile(membership: m)),
+        ],
+
+        // ── Team browser ──
+        if (_showBrowser) ...[
+          const Divider(height: 1, indent: 16, endIndent: 16),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: Text('ALL TEAMS',
+                style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: C.hint,
+                    letterSpacing: 1)),
+          ),
+          if (_loadingTeams)
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: C.g2)),
+            )
+          else if (_teamError != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: Text(_teamError!,
+                  style: const TextStyle(color: Colors.red, fontSize: 13)),
+            )
+          else if (_allTeams.isEmpty)
+            const Padding(
+              padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: Text('No teams available.',
+                  style: TextStyle(color: C.grey, fontSize: 13)),
+            )
+          else
+            ..._allTeams.map((team) {
+              final alreadyApplied =
+                  memberships.any((m) => m.teamName == team.name);
+              return _TeamBrowserTile(
+                team: team,
+                alreadyApplied: alreadyApplied,
+                onApply: alreadyApplied
+                    ? null
+                    : () async {
+                        await store.applyToTeam(team);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                  'Applied to ${team.name}! Waiting for approval.'),
+                              backgroundColor: C.g2,
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10)),
+                            ),
+                          );
+                          setState(() {}); // refresh applied state
+                        }
+                      },
+              );
+            }),
+          const SizedBox(height: 8),
+        ],
+
+        const SizedBox(height: 4),
+      ]),
+    );
+  }
+}
+
+// ── Membership tile (my team / pending) ──────────────────────────
+class _MembershipTile extends StatelessWidget {
+  final TeamMembership membership;
+  const _MembershipTile({required this.membership});
+
+  @override
+  Widget build(BuildContext context) {
+    final isApproved = membership.status == MembershipStatus.approved;
+    final isPending = membership.status == MembershipStatus.pending;
+
+    final statusColor = isApproved
+        ? const Color(0xFF2E7D32)
+        : isPending
+            ? const Color(0xFFF57C00)
+            : Colors.red.shade600;
+
+    final statusLabel =
+        isApproved ? 'Member' : isPending ? 'Pending' : 'Rejected';
+    final statusIcon = isApproved
+        ? Icons.check_circle_outline
+        : isPending
+            ? Icons.hourglass_top_rounded
+            : Icons.cancel_outlined;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+      child: Container(
+        decoration: BoxDecoration(
+          color: statusColor.withAlpha(12),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: statusColor.withAlpha(40), width: 1),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(children: [
+          // Abbreviation badge
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [C.g2, const Color(0xFF1B5E20)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Center(
+              child: Text(membership.teamAbbreviation,
+                  style: const TextStyle(
+                      color: C.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900)),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(membership.teamName,
+                  style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: C.dark)),
+              Text(
+                  'Applied ${_formatDate(membership.appliedAt)}',
+                  style: const TextStyle(fontSize: 11, color: C.grey)),
+            ]),
+          ),
+          Row(children: [
+            Icon(statusIcon, size: 14, color: statusColor),
+            const SizedBox(width: 4),
+            Text(statusLabel,
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: statusColor)),
+          ]),
+        ]),
+      ),
+    );
+  }
+
+  String _formatDate(DateTime d) =>
+      '${d.day}/${d.month}/${d.year}';
+}
+
+// ── Team browser tile ────────────────────────────────────────────
+class _TeamBrowserTile extends StatefulWidget {
+  final TeamInfo team;
+  final bool alreadyApplied;
+  final Future<void> Function()? onApply;
+  const _TeamBrowserTile(
+      {required this.team,
+      required this.alreadyApplied,
+      required this.onApply});
+
+  @override
+  State<_TeamBrowserTile> createState() => _TeamBrowserTileState();
+}
+
+class _TeamBrowserTileState extends State<_TeamBrowserTile> {
+  bool _applying = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+      child: Container(
+        decoration: BoxDecoration(
+          color: C.gLight.withAlpha(80),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: C.gLight, width: 1),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(children: [
+          // Abbreviation badge
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: C.g2.withAlpha(20),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: C.g2.withAlpha(40)),
+            ),
+            child: Center(
+              child: Text(widget.team.abbreviation,
+                  style: const TextStyle(
+                      color: C.g2,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900)),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(widget.team.name,
+                  style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: C.dark)),
+              Text(
+                  '${widget.team.playerCount} players · ${widget.team.matchCount} matches',
+                  style: const TextStyle(fontSize: 11, color: C.grey)),
+            ]),
+          ),
+          const SizedBox(width: 8),
+          if (widget.alreadyApplied)
+            Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: C.g2.withAlpha(15),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: C.g2.withAlpha(40)),
+              ),
+              child: const Text('Applied',
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: C.g2)),
+            )
+          else if (_applying)
+            const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2, color: C.g2))
+          else
+            GestureDetector(
+              onTap: () async {
+                setState(() => _applying = true);
+                await widget.onApply?.call();
+                if (mounted) setState(() => _applying = false);
+              },
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                      colors: [Color(0xFF2E7D32), Color(0xFF1B5E20)]),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Text('Apply',
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: C.white)),
+              ),
+            ),
+        ]),
+      ),
+    );
+  }
+}
+
+// ── Small inline button ──────────────────────────────────────────
+class _SmallButton extends StatefulWidget {
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+  const _SmallButton(
+      {required this.label, required this.icon, required this.onTap});
+
+  @override
+  State<_SmallButton> createState() => _SmallButtonState();
+}
+
+class _SmallButtonState extends State<_SmallButton> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: _hovered ? C.g2 : C.g2.withAlpha(15),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: C.g2.withAlpha(60)),
+          ),
+          child: Row(children: [
+            Icon(widget.icon,
+                size: 13, color: _hovered ? C.white : C.g2),
+            const SizedBox(width: 4),
+            Text(widget.label,
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: _hovered ? C.white : C.g2)),
+          ]),
+        ),
+      ),
+    );
   }
 }
 

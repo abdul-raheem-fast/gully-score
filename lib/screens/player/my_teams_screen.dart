@@ -1,0 +1,832 @@
+import 'package:flutter/material.dart';
+import '../../models/player_models.dart';
+import '../../state/app_store.dart';
+import '../../theme/app_theme.dart';
+import '../../services/supabase_service.dart';
+
+class MyTeamsScreen extends StatefulWidget {
+  const MyTeamsScreen({super.key});
+
+  @override
+  State<MyTeamsScreen> createState() => _MyTeamsScreenState();
+}
+
+class _MyTeamsScreenState extends State<MyTeamsScreen>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabCtrl;
+
+  // ── All-teams browser ──
+  List<TeamInfo> _allTeams = [];
+  bool _loadingTeams = true;
+  String? _teamsError;
+  String _search = '';
+
+  // ── Captain panel ──
+  List<Map<String, dynamic>> _pendingRequests = [];
+  bool _loadingRequests = true;
+  bool _isCaptain = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabCtrl = TabController(length: 2, vsync: this);
+    _loadAllTeams();
+    _loadCaptainData();
+  }
+
+  @override
+  void dispose() {
+    _tabCtrl.dispose();
+    super.dispose();
+  }
+
+  // ── Data loaders ────────────────────────────────────────────
+  Future<void> _loadAllTeams() async {
+    setState(() {
+      _loadingTeams = true;
+      _teamsError = null;
+    });
+    try {
+      final teams = await SupabaseService.fetchTeams();
+      if (!mounted) return;
+      if (teams.isEmpty) {
+        // fallback to local seed
+        final store = AppStore.of(context);
+        setState(() {
+          _allTeams = store.teams
+              .map((t) => TeamInfo(
+                    id: t.id,
+                    name: t.name,
+                    abbreviation: t.abbreviation,
+                    captain: t.captain,
+                    playerCount: t.playerCount,
+                    matchCount: t.matchCount,
+                  ))
+              .toList();
+        });
+      } else {
+        setState(() => _allTeams = teams);
+      }
+    } catch (_) {
+      if (!mounted) return;
+      final store = AppStore.of(context);
+      setState(() {
+        _allTeams = store.teams
+            .map((t) => TeamInfo(
+                  id: t.id,
+                  name: t.name,
+                  abbreviation: t.abbreviation,
+                  captain: t.captain,
+                  playerCount: t.playerCount,
+                  matchCount: t.matchCount,
+                ))
+            .toList();
+        _teamsError =
+            _allTeams.isEmpty ? 'Could not load teams from server.' : null;
+      });
+    } finally {
+      if (mounted) setState(() => _loadingTeams = false);
+    }
+  }
+
+  Future<void> _loadCaptainData() async {
+    setState(() => _loadingRequests = true);
+    try {
+      final captainTeams = await SupabaseService.fetchCaptainTeams();
+      if (!mounted) return;
+      _isCaptain = captainTeams.isNotEmpty;
+      if (_isCaptain) {
+        final requests =
+            await SupabaseService.fetchPendingRequestsForCaptain(captainTeams);
+        if (!mounted) return;
+        setState(() => _pendingRequests = requests);
+      }
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _loadingRequests = false);
+    }
+  }
+
+  Future<void> _refreshMemberships() async {
+    await AppStore.of(context).refreshMyMemberships();
+  }
+
+  // ── Approve / Reject ─────────────────────────────────────────
+  Future<void> _updateRequest(String id, String status) async {
+    try {
+      await SupabaseService.updateMembershipStatus(id: id, status: status);
+      setState(() =>
+          _pendingRequests.removeWhere((r) => r['id'].toString() == id));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(_snack(
+          status == 'approved' ? '✅ Request approved!' : '❌ Request rejected.',
+          status == 'approved' ? C.g2 : Colors.red.shade600,
+        ));
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(_snack('Action failed. Try again.', Colors.red.shade600));
+      }
+    }
+  }
+
+  SnackBar _snack(String msg, Color color) => SnackBar(
+        content: Text(msg),
+        backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final store = AppStore.of(context);
+    final memberships = store.myMemberships;
+
+    return Scaffold(
+      backgroundColor: C.bg,
+      body: NestedScrollView(
+        headerSliverBuilder: (ctx, _) => [
+          SliverAppBar(
+            pinned: true,
+            backgroundColor: const Color(0xFF1B5E20),
+            foregroundColor: Colors.white,
+            expandedHeight: 130,
+            flexibleSpace: FlexibleSpaceBar(
+              titlePadding: const EdgeInsets.fromLTRB(20, 0, 20, 56),
+              title: const Text('My Teams',
+                  style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 22,
+                      color: Colors.white)),
+              background: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Color(0xFF1B5E20), Color(0xFF388E3C)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                ),
+              ),
+            ),
+            bottom: TabBar(
+              controller: _tabCtrl,
+              indicatorColor: Colors.white,
+              indicatorWeight: 3,
+              labelColor: Colors.white,
+              unselectedLabelColor: Colors.white60,
+              labelStyle:
+                  const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+              tabs: [
+                const Tab(text: 'Browse & Apply'),
+                Tab(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('My Memberships'),
+                      if (memberships
+                          .where((m) => m.status == MembershipStatus.approved)
+                          .isNotEmpty) ...[
+                        const SizedBox(width: 6),
+                        _Badge(
+                            memberships
+                                .where((m) =>
+                                    m.status == MembershipStatus.approved)
+                                .length
+                                .toString(),
+                            Colors.white),
+                      ]
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+        body: TabBarView(
+          controller: _tabCtrl,
+          children: [
+            // ── Tab 1: Browse & Apply ──
+            _BrowseTab(
+              allTeams: _allTeams,
+              memberships: memberships,
+              loading: _loadingTeams,
+              error: _teamsError,
+              search: _search,
+              onSearchChanged: (v) => setState(() => _search = v),
+              onApply: (team) async {
+                await store.applyToTeam(team);
+                if (!mounted) return;
+                final messenger = ScaffoldMessenger.of(context);
+                messenger.showSnackBar(_snack(
+                  'Applied to ${team.name}! Waiting for captain approval.',
+                  C.g2,
+                ));
+                setState(() {}); // refresh applied badges
+              },
+              onRefresh: _loadAllTeams,
+            ),
+
+            // ── Tab 2: My Memberships + Captain Panel ──
+            RefreshIndicator(
+              color: C.g2,
+              onRefresh: () async {
+                await _refreshMemberships();
+                await _loadCaptainData();
+              },
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  // ── My memberships ──
+                  _SectionHeader('My Memberships'),
+                  const SizedBox(height: 8),
+                  if (store.isLoadingMemberships)
+                    const _Loader()
+                  else if (memberships.isEmpty)
+                    _EmptyHint(
+                      icon: Icons.groups_2_outlined,
+                      label: "You haven't applied to any team yet.",
+                    )
+                  else
+                    ...memberships.map((m) => _MembershipCard(membership: m)),
+
+                  const SizedBox(height: 24),
+
+                  // ── Captain panel (only if user is a captain) ──
+                  if (_isCaptain) ...[
+                    _SectionHeader('Captain Panel — Pending Requests'),
+                    const SizedBox(height: 8),
+                    if (_loadingRequests)
+                      const _Loader()
+                    else if (_pendingRequests.isEmpty)
+                      _EmptyHint(
+                        icon: Icons.inbox_outlined,
+                        label: 'No pending join requests for your team(s).',
+                      )
+                    else
+                      ..._pendingRequests.map((r) => _RequestCard(
+                            request: r,
+                            onApprove: () =>
+                                _updateRequest(r['id'].toString(), 'approved'),
+                            onReject: () =>
+                                _updateRequest(r['id'].toString(), 'rejected'),
+                          )),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Browse & Apply Tab ───────────────────────────────────────────
+class _BrowseTab extends StatelessWidget {
+  final List<TeamInfo> allTeams;
+  final List<TeamMembership> memberships;
+  final bool loading;
+  final String? error;
+  final String search;
+  final ValueChanged<String> onSearchChanged;
+  final Future<void> Function(TeamInfo) onApply;
+  final Future<void> Function() onRefresh;
+
+  const _BrowseTab({
+    required this.allTeams,
+    required this.memberships,
+    required this.loading,
+    this.error,
+    required this.search,
+    required this.onSearchChanged,
+    required this.onApply,
+    required this.onRefresh,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = search.isEmpty
+        ? allTeams
+        : allTeams
+            .where((t) =>
+                t.name.toLowerCase().contains(search.toLowerCase()) ||
+                t.abbreviation.toLowerCase().contains(search.toLowerCase()))
+            .toList();
+
+    return RefreshIndicator(
+      color: C.g2,
+      onRefresh: onRefresh,
+      child: CustomScrollView(
+        slivers: [
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: TextField(
+                onChanged: onSearchChanged,
+                decoration: InputDecoration(
+                  hintText: 'Search teams…',
+                  prefixIcon: const Icon(Icons.search, color: C.grey),
+                  filled: true,
+                  fillColor: C.white,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 14),
+                ),
+              ),
+            ),
+          ),
+          if (loading)
+            const SliverFillRemaining(child: _Loader())
+          else if (error != null && filtered.isEmpty)
+            SliverFillRemaining(
+                child: _EmptyHint(icon: Icons.error_outline, label: error!))
+          else if (filtered.isEmpty)
+            const SliverFillRemaining(
+                child: _EmptyHint(
+                    icon: Icons.search_off, label: 'No teams found.'))
+          else
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (ctx, i) {
+                    final team = filtered[i];
+                    final applied =
+                        memberships.any((m) => m.teamName == team.name);
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _TeamCard(
+                        team: team,
+                        alreadyApplied: applied,
+                        onApply: applied ? null : () => onApply(team),
+                      ),
+                    );
+                  },
+                  childCount: filtered.length,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Individual team card in browser ─────────────────────────────
+class _TeamCard extends StatefulWidget {
+  final TeamInfo team;
+  final bool alreadyApplied;
+  final Future<void> Function()? onApply;
+  const _TeamCard(
+      {required this.team,
+      required this.alreadyApplied,
+      required this.onApply});
+
+  @override
+  State<_TeamCard> createState() => _TeamCardState();
+}
+
+class _TeamCardState extends State<_TeamCard> {
+  bool _applying = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: C.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withAlpha(12),
+              blurRadius: 8,
+              offset: const Offset(0, 3))
+        ],
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Row(children: [
+        // Abbr badge
+        Container(
+          width: 52,
+          height: 52,
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [Color(0xFF2E7D32), Color(0xFF1B5E20)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Center(
+            child: Text(widget.team.abbreviation,
+                style: const TextStyle(
+                    color: C.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900)),
+          ),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(widget.team.name,
+                style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: C.dark)),
+            const SizedBox(height: 4),
+            Row(children: [
+              _Pill(Icons.person_outline, widget.team.captain),
+              const SizedBox(width: 10),
+              _Pill(Icons.sports_cricket_outlined,
+                  '${widget.team.matchCount} matches'),
+            ]),
+            const SizedBox(height: 4),
+            _Pill(
+                Icons.group_outlined, '${widget.team.playerCount} players'),
+          ]),
+        ),
+        const SizedBox(width: 10),
+        // Action button
+        if (widget.alreadyApplied)
+          _AppliedChip()
+        else if (_applying)
+          const SizedBox(
+              width: 22,
+              height: 22,
+              child: CircularProgressIndicator(strokeWidth: 2.5, color: C.g2))
+        else
+          _ApplyButton(
+            onTap: () async {
+              setState(() => _applying = true);
+              await widget.onApply?.call();
+              if (mounted) setState(() => _applying = false);
+            },
+          ),
+      ]),
+    );
+  }
+}
+
+// ── Membership card ──────────────────────────────────────────────
+class _MembershipCard extends StatelessWidget {
+  final TeamMembership membership;
+  const _MembershipCard({required this.membership});
+
+  @override
+  Widget build(BuildContext context) {
+    final isApproved = membership.status == MembershipStatus.approved;
+    final isPending = membership.status == MembershipStatus.pending;
+    final statusColor = isApproved
+        ? C.g2
+        : isPending
+            ? const Color(0xFFF57C00)
+            : Colors.red.shade600;
+    final statusLabel =
+        isApproved ? 'Member' : isPending ? 'Pending' : 'Rejected';
+    final statusIcon = isApproved
+        ? Icons.check_circle_outline
+        : isPending
+            ? Icons.hourglass_top_rounded
+            : Icons.cancel_outlined;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: C.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: statusColor.withAlpha(40)),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withAlpha(8),
+              blurRadius: 8,
+              offset: const Offset(0, 2))
+        ],
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Row(children: [
+        Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: statusColor.withAlpha(18),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Center(
+            child: Text(membership.teamAbbreviation,
+                style: TextStyle(
+                    color: statusColor,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900)),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(membership.teamName,
+                style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: C.dark)),
+            Text(
+                'Applied ${_fmtDate(membership.appliedAt)}',
+                style: const TextStyle(fontSize: 11, color: C.grey)),
+          ]),
+        ),
+        Row(children: [
+          Icon(statusIcon, size: 15, color: statusColor),
+          const SizedBox(width: 4),
+          Text(statusLabel,
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: statusColor)),
+        ]),
+      ]),
+    );
+  }
+
+  String _fmtDate(DateTime d) => '${d.day}/${d.month}/${d.year}';
+}
+
+// ── Captain request card ─────────────────────────────────────────
+class _RequestCard extends StatefulWidget {
+  final Map<String, dynamic> request;
+  final Future<void> Function() onApprove;
+  final Future<void> Function() onReject;
+  const _RequestCard(
+      {required this.request,
+      required this.onApprove,
+      required this.onReject});
+
+  @override
+  State<_RequestCard> createState() => _RequestCardState();
+}
+
+class _RequestCardState extends State<_RequestCard> {
+  bool _loading = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final r = widget.request;
+    final playerName = (r['player_name'] as String?) ??
+        (r['user_email'] as String?) ??
+        'Unknown Player';
+    final teamName = (r['team_name'] as String?) ?? '';
+    final appliedAt = DateTime.tryParse(r['applied_at']?.toString() ?? '') ??
+        DateTime.now();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: C.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFF57C00).withAlpha(60)),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withAlpha(8),
+              blurRadius: 8,
+              offset: const Offset(0, 2))
+        ],
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF57C00).withAlpha(20),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.person_outline,
+                color: Color(0xFFF57C00), size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(playerName,
+                  style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: C.dark)),
+              Text('Wants to join $teamName  •  ${_fmtDate(appliedAt)}',
+                  style: const TextStyle(fontSize: 11, color: C.grey)),
+            ]),
+          ),
+        ]),
+        const SizedBox(height: 12),
+        if (_loading)
+          const Center(
+              child: SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2.5, color: C.g2)))
+        else
+          Row(children: [
+            Expanded(
+              child: _ActionBtn(
+                label: 'Approve',
+                icon: Icons.check_rounded,
+                color: C.g2,
+                filled: true,
+                onTap: () async {
+                  setState(() => _loading = true);
+                  await widget.onApprove();
+                  if (mounted) setState(() => _loading = false);
+                },
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _ActionBtn(
+                label: 'Reject',
+                icon: Icons.close_rounded,
+                color: Colors.red.shade600,
+                filled: false,
+                onTap: () async {
+                  setState(() => _loading = true);
+                  await widget.onReject();
+                  if (mounted) setState(() => _loading = false);
+                },
+              ),
+            ),
+          ]),
+      ]),
+    );
+  }
+
+  String _fmtDate(DateTime d) => '${d.day}/${d.month}/${d.year}';
+}
+
+// ── Small reusable widgets ───────────────────────────────────────
+class _SectionHeader extends StatelessWidget {
+  final String text;
+  const _SectionHeader(this.text);
+  @override
+  Widget build(BuildContext context) => Text(text.toUpperCase(),
+      style: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+          color: C.grey,
+          letterSpacing: 1.1));
+}
+
+class _Badge extends StatelessWidget {
+  final String count;
+  final Color color;
+  const _Badge(this.count, this.color);
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+            color: color.withAlpha(40),
+            borderRadius: BorderRadius.circular(20)),
+        child: Text(count,
+            style: TextStyle(
+                fontSize: 10, fontWeight: FontWeight.w800, color: color)),
+      );
+}
+
+class _Pill extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _Pill(this.icon, this.label);
+  @override
+  Widget build(BuildContext context) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: C.grey),
+          const SizedBox(width: 3),
+          Text(label,
+              style: const TextStyle(fontSize: 11, color: C.grey)),
+        ],
+      );
+}
+
+class _Loader extends StatelessWidget {
+  const _Loader();
+  @override
+  Widget build(BuildContext context) => const Padding(
+        padding: EdgeInsets.all(32),
+        child: Center(
+            child: CircularProgressIndicator(strokeWidth: 2.5, color: C.g2)),
+      );
+}
+
+class _EmptyHint extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _EmptyHint({required this.icon, required this.label});
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Icon(icon, size: 40, color: C.hint),
+          const SizedBox(height: 12),
+          Text(label,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: C.grey, fontSize: 13)),
+        ]),
+      );
+}
+
+class _AppliedChip extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: C.g2.withAlpha(15),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: C.g2.withAlpha(50)),
+        ),
+        child: const Text('Applied',
+            style: TextStyle(
+                fontSize: 12, fontWeight: FontWeight.w600, color: C.g2)),
+      );
+}
+
+class _ApplyButton extends StatefulWidget {
+  final VoidCallback onTap;
+  const _ApplyButton({required this.onTap});
+  @override
+  State<_ApplyButton> createState() => _ApplyButtonState();
+}
+
+class _ApplyButtonState extends State<_ApplyButton> {
+  bool _hovered = false;
+  @override
+  Widget build(BuildContext context) => MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: GestureDetector(
+          onTap: widget.onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: _hovered
+                    ? [const Color(0xFF1B5E20), const Color(0xFF2E7D32)]
+                    : [const Color(0xFF2E7D32), const Color(0xFF388E3C)],
+              ),
+              borderRadius: BorderRadius.circular(10),
+              boxShadow: _hovered
+                  ? [
+                      BoxShadow(
+                          color: C.g2.withAlpha(70),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4))
+                    ]
+                  : [],
+            ),
+            child: const Text('Apply',
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: C.white)),
+          ),
+        ),
+      );
+}
+
+class _ActionBtn extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final bool filled;
+  final VoidCallback onTap;
+  const _ActionBtn(
+      {required this.label,
+      required this.icon,
+      required this.color,
+      required this.filled,
+      required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => GestureDetector(
+        onTap: onTap,
+        child: Container(
+          height: 40,
+          decoration: BoxDecoration(
+            color: filled ? color : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: color, width: 1.5),
+          ),
+          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Icon(icon, size: 16, color: filled ? Colors.white : color),
+            const SizedBox(width: 6),
+            Text(label,
+                style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: filled ? Colors.white : color)),
+          ]),
+        ),
+      );
+}

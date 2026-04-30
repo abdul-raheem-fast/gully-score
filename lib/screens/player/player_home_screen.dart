@@ -7,6 +7,7 @@ import '../../route_paths.dart';
 import 'player_matches_screen.dart';
 import 'player_stats_screen.dart';
 import 'player_profile_screen.dart';
+import 'my_teams_screen.dart';
 
 
 class PlayerHomeScreen extends StatefulWidget {
@@ -324,8 +325,10 @@ class _DashboardTabState extends State<_DashboardTab>
                   onNewMatch: () => ScaffoldMessenger.of(context).showSnackBar(
                     _snack('New Match — coming soon'),
                   ),
-                  onMyTeams: () => ScaffoldMessenger.of(context).showSnackBar(
-                    _snack('My Teams — coming soon'),
+                  onMyTeams: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const MyTeamsScreen()),
                   ),
                   onAnalytics: () =>
                       ScaffoldMessenger.of(context).showSnackBar(

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/admin_models.dart';
+import '../models/player_models.dart';
 import '../services/supabase_service.dart';
 
 enum UserRole { admin, player }
@@ -40,6 +41,11 @@ class AppStoreState extends State<AppStore> {
   String? teamsLoadError;
   bool isLoadingUsers = false;
   String? usersLoadError;
+  bool isLoadingMemberships = false;
+  String? membershipsLoadError;
+
+  final List<TeamMembership> _myMemberships = [];
+  List<TeamMembership> get myMemberships => List.unmodifiable(_myMemberships);
 
   final List<AuthUser> _users = [];
 
@@ -147,6 +153,7 @@ class AppStoreState extends State<AppStore> {
     _hydrateMatches();
     _hydrateTeams();
     _hydrateUsers();
+    _hydrateMyMemberships();
   }
 
   void _hydrateAuthSession() {
@@ -261,6 +268,65 @@ class AppStoreState extends State<AppStore> {
   }
 
   Future<void> refreshUsers() => _hydrateUsers();
+
+  Future<void> _hydrateMyMemberships() async {
+    setState(() {
+      isLoadingMemberships = true;
+      membershipsLoadError = null;
+    });
+    try {
+      final memberships = await SupabaseService.fetchMyMemberships();
+      if (!mounted) return;
+      setState(() {
+        _myMemberships
+          ..clear()
+          ..addAll(memberships);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        membershipsLoadError = 'Could not load team memberships.';
+      });
+    } finally {
+      if (!mounted) return;
+      setState(() => isLoadingMemberships = false);
+    }
+  }
+
+  Future<void> refreshMyMemberships() => _hydrateMyMemberships();
+
+  /// Apply for a team. Optimistically inserts a pending record, then syncs.
+  Future<void> applyToTeam(TeamInfo team) async {
+    // Optimistic insert.
+    final optimistic = TeamMembership(
+      id: 'opt_${team.id}',
+      teamId: team.id,
+      teamName: team.name,
+      teamAbbreviation: team.abbreviation,
+      status: MembershipStatus.pending,
+      appliedAt: DateTime.now(),
+    );
+    setState(() {
+      // Remove any prior entry for this team.
+      _myMemberships.removeWhere((m) => m.teamName == team.name);
+      _myMemberships.insert(0, optimistic);
+    });
+    try {
+      await SupabaseService.applyToTeam(
+        teamName: team.name,
+        teamAbbreviation: team.abbreviation,
+      );
+      // Refresh to get server-assigned id.
+      await _hydrateMyMemberships();
+    } catch (e) {
+      if (!mounted) return;
+      // Roll back optimistic update.
+      setState(() {
+        _myMemberships.removeWhere((m) => m.id == optimistic.id);
+        membershipsLoadError = 'Failed to apply. Please try again.';
+      });
+    }
+  }
 
   void setRole(UserRole role) => setState(() => selectedRole = role);
 

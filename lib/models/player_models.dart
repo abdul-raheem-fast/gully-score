@@ -2,6 +2,46 @@
 
 enum MatchResult { won, lost, draw }
 
+enum MembershipStatus { pending, approved, rejected }
+
+/// Lightweight team record used in the player "My Teams" view.
+class TeamInfo {
+  final String id;
+  final String name;
+  final String abbreviation;
+  final String captain;
+  final int playerCount;
+  final int matchCount;
+
+  const TeamInfo({
+    required this.id,
+    required this.name,
+    required this.abbreviation,
+    required this.captain,
+    required this.playerCount,
+    required this.matchCount,
+  });
+}
+
+/// A player's membership / application record for a team.
+class TeamMembership {
+  final String id;
+  final String teamId;
+  final String teamName;
+  final String teamAbbreviation;
+  final MembershipStatus status;
+  final DateTime appliedAt;
+
+  const TeamMembership({
+    required this.id,
+    required this.teamId,
+    required this.teamName,
+    required this.teamAbbreviation,
+    required this.status,
+    required this.appliedAt,
+  });
+}
+
 class PlayerMatch {
   final String id;
   final String myTeam;

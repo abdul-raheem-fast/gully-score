@@ -1,6 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/admin_models.dart';
+import '../models/player_models.dart';
 
 class SupabaseService {
   const SupabaseService._();
@@ -202,6 +203,167 @@ class SupabaseService {
 
     teams.sort((a, b) => b.matchCount.compareTo(a.matchCount));
     return teams;
+  }
+
+  static Future<List<TeamInfo>> fetchTeams() async {
+    // We re-use the players table aggregation logic to avoid a separate `teams` table.
+    final teams = await fetchAdminTeams();
+    return teams
+        .map((t) => TeamInfo(
+              id: t.id,
+              name: t.name,
+              abbreviation: t.abbreviation,
+              captain: t.captain,
+              playerCount: t.playerCount,
+              matchCount: t.matchCount,
+            ))
+        .toList();
+  }
+
+  /// Apply for membership in [teamName]. Stores a row in `team_memberships`.
+  /// Uses insert first; if a row already exists (conflict) it updates instead.
+  static Future<void> applyToTeam({
+    required String teamName,
+    required String teamAbbreviation,
+  }) async {
+    final userId = currentUser?.id;
+    if (userId == null) throw Exception('Not authenticated');
+
+    final now = DateTime.now().toIso8601String();
+    try {
+      // Try a plain insert first.
+      await client.from('team_memberships').insert({
+        'user_id': userId,
+        'team_name': teamName,
+        'team_abbreviation': teamAbbreviation,
+        'status': 'pending',
+        'applied_at': now,
+      });
+    } catch (e) {
+      // If it's a unique-violation (code 23505), update the existing row.
+      final msg = e.toString();
+      if (msg.contains('23505') || msg.contains('duplicate') || msg.contains('unique')) {
+        await client
+            .from('team_memberships')
+            .update({
+              'team_abbreviation': teamAbbreviation,
+              'status': 'pending',
+              'applied_at': now,
+            })
+            .eq('user_id', userId)
+            .eq('team_name', teamName);
+      } else {
+        rethrow;
+      }
+    }
+  }
+
+  /// Fetch all team_memberships rows for the currently signed-in player.
+  static Future<List<TeamMembership>> fetchMyMemberships() async {
+    final userId = currentUser?.id;
+    if (userId == null) return [];
+    final response = await client
+        .from('team_memberships')
+        .select()
+        .eq('user_id', userId)
+        .order('applied_at', ascending: false);
+    final rows = List<Map<String, dynamic>>.from(response);
+    return rows.map((row) {
+      final statusRaw = (row['status'] as String?) ?? 'pending';
+      MembershipStatus status;
+      switch (statusRaw) {
+        case 'approved':
+          status = MembershipStatus.approved;
+          break;
+        case 'rejected':
+          status = MembershipStatus.rejected;
+          break;
+        default:
+          status = MembershipStatus.pending;
+      }
+      return TeamMembership(
+        id: row['id']?.toString() ?? '',
+        teamId: row['team_name']?.toString() ?? '',
+        teamName: row['team_name']?.toString() ?? '',
+        teamAbbreviation: row['team_abbreviation']?.toString() ?? '',
+        status: status,
+        appliedAt: DateTime.tryParse(row['applied_at']?.toString() ?? '') ??
+            DateTime.now(),
+      );
+    }).toList();
+  }
+
+  /// Returns team names where the current user is recorded as captain
+  /// in the `players` table.
+  static Future<List<String>> fetchCaptainTeams() async {
+    final userId = currentUser?.id;
+    final userName = getCurrentUserName();
+    if (userId == null || userName == null || userName.isEmpty) return [];
+    final response = await client
+        .from('players')
+        .select('team_name')
+        .eq('player_name', userName)
+        .eq('is_captain', true);
+    final rows = List<Map<String, dynamic>>.from(response);
+    return rows
+        .map((r) => (r['team_name'] as String?) ?? '')
+        .where((t) => t.isNotEmpty)
+        .toList();
+  }
+
+  /// Returns pending join requests for teams where the current user is captain.
+  /// Joins team_memberships with profiles so we get the player's name & email.
+  static Future<List<Map<String, dynamic>>> fetchPendingRequestsForCaptain(
+      List<String> captainTeams) async {
+    if (captainTeams.isEmpty) return [];
+    // Fetch pending memberships for those teams.
+    final response = await client
+        .from('team_memberships')
+        .select()
+        .inFilter('team_name', captainTeams)
+        .eq('status', 'pending')
+        .order('applied_at', ascending: true);
+    final rows = List<Map<String, dynamic>>.from(response);
+
+    // Enrich with profile name/email for each row.
+    final enriched = <Map<String, dynamic>>[];
+    for (final row in rows) {
+      final applicantId = row['user_id']?.toString() ?? '';
+      String playerName = 'Unknown Player';
+      String userEmail = '';
+      try {
+        final profiles = await client
+            .from('profiles')
+            .select('name, email')
+            .eq('id', applicantId)
+            .limit(1);
+        final profileRows = List<Map<String, dynamic>>.from(profiles);
+        if (profileRows.isNotEmpty) {
+          playerName = (profileRows.first['name'] as String?) ?? playerName;
+          userEmail = (profileRows.first['email'] as String?) ?? '';
+        }
+      } catch (_) {}
+      enriched.add({
+        ...row,
+        'player_name': playerName,
+        'user_email': userEmail,
+      });
+    }
+    return enriched;
+  }
+
+  /// Approve or reject a membership request.
+  static Future<void> updateMembershipStatus({
+    required String id,
+    required String status, // 'approved' | 'rejected'
+  }) async {
+    await client
+        .from('team_memberships')
+        .update({
+          'status': status,
+          'updated_at': DateTime.now().toIso8601String(),
+        })
+        .eq('id', id);
   }
 
   static Future<void> addPlayer({
