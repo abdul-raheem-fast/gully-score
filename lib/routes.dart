@@ -13,16 +13,38 @@ import 'screens/auth_screens.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/splash_screen.dart';
 import 'screens/player/player_home_screen.dart';
+import 'screens/player/new_match_screen.dart';
+import 'screens/player/live_scoring_screen.dart';
 
 /// Central app route definitions.
 class AppRoutes {
   static Route<dynamic>? onGenerateRoute(RouteSettings settings) {
-    final WidgetBuilder? builder = _routeBuilders()[settings.name];
-    if (builder == null) return null;
+    Widget? page;
+    switch (settings.name) {
+      case RoutePaths.splash: page = const SplashScreen(); break;
+      case RoutePaths.onboarding: page = const OnboardingScreen(); break;
+      case RoutePaths.roleSelect: page = const RoleSelectScreen(); break;
+      case RoutePaths.login: page = const LoginScreen(); break;
+      case RoutePaths.signup: page = const SignUpScreen(); break;
+      case RoutePaths.home: page = const PlayerHomeScreen(); break;
+      case RoutePaths.admin: page = const AdminDashboardScreen(); break;
+      case RoutePaths.adminUsers: page = const AdminUsersScreen(); break;
+      case RoutePaths.adminMatches: page = const AdminMatchesScreen(); break;
+      case RoutePaths.adminProfile: page = const AdminProfileScreen(); break;
+      case RoutePaths.adminTeams: page = const AdminTeamsScreen(); break;
+      case RoutePaths.adminReports: page = const AdminReportsScreen(); break;
+      case RoutePaths.adminSettings: page = const AdminSettingsScreen(); break;
+      case RoutePaths.newMatch: page = const NewMatchScreen(); break;
+      case RoutePaths.liveScoring:
+        final args = settings.arguments as ScoringSession?;
+        page = args == null ? const PlayerHomeScreen() : LiveScoringScreen(session: args);
+        break;
+    }
+    if (page == null) return null;
 
     return PageRouteBuilder(
       settings: settings,
-      pageBuilder: (context, animation, secondaryAnimation) => builder(context),
+      pageBuilder: (context, animation, secondaryAnimation) => page!,
       transitionDuration: const Duration(milliseconds: 360),
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
         final tween = Tween(begin: const Offset(0.1, 0), end: Offset.zero);
@@ -34,21 +56,5 @@ class AppRoutes {
       },
     );
   }
-
-  static Map<String, WidgetBuilder> _routeBuilders() => {
-        RoutePaths.splash: (_) => const SplashScreen(),
-        RoutePaths.onboarding: (_) => const OnboardingScreen(),
-        RoutePaths.roleSelect: (_) => const RoleSelectScreen(),
-        RoutePaths.login: (_) => const LoginScreen(),
-        RoutePaths.signup: (_) => const SignUpScreen(),
-        RoutePaths.home: (_) => const PlayerHomeScreen(),
-        RoutePaths.admin: (_) => const AdminDashboardScreen(),
-        RoutePaths.adminUsers: (_) => const AdminUsersScreen(),
-        RoutePaths.adminMatches: (_) => const AdminMatchesScreen(),
-        RoutePaths.adminProfile: (_) => const AdminProfileScreen(),
-        RoutePaths.adminTeams: (_) => const AdminTeamsScreen(),
-        RoutePaths.adminReports: (_) => const AdminReportsScreen(),
-        RoutePaths.adminSettings: (_) => const AdminSettingsScreen(),
-      };
 }
 

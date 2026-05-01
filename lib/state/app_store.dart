@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/admin_models.dart';
 import '../models/player_models.dart';
+import '../models/scoring_models.dart';
 import '../services/supabase_service.dart';
 
 enum UserRole { admin, player }
@@ -476,6 +477,32 @@ class AppStoreState extends State<AppStore> {
         teamsLoadError = 'Could not add player to backend.';
       });
     }
+  }
+
+  /// Convert a scoring session to AdminMatch and add to local list.
+  void saveScoringSession(ScoringSession session) {
+    final innings1 = session.innings1;
+    final innings2 = session.innings2;
+    final scoreA = '${innings1?.totalRuns ?? 0}/${innings1?.totalWickets ?? 0}';
+    final scoreB = '${innings2?.totalRuns ?? 0}/${innings2?.totalWickets ?? 0}';
+    final match = AdminMatch(
+      id: session.setup.id,
+      teamA: session.setup.teamA,
+      teamB: session.setup.teamB,
+      scoreA: scoreA,
+      scoreB: scoreB,
+      venue: session.setup.venue,
+      date: session.setup.date,
+      status: session.isCompleted ? MatchStatus.completed : MatchStatus.live,
+    );
+    setState(() {
+      final idx = _matches.indexWhere((m) => m.id == match.id);
+      if (idx >= 0) {
+        _matches[idx] = match;
+      } else {
+        _matches.insert(0, match);
+      }
+    });
   }
 
   @override

@@ -322,8 +322,9 @@ class _DashboardTabState extends State<_DashboardTab>
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 22, 20, 0),
                 child: _QuickActions(
-                  onNewMatch: () => ScaffoldMessenger.of(context).showSnackBar(
-                    _snack('New Match — coming soon'),
+                  onNewMatch: () => Navigator.pushNamed(
+                    context,
+                    RoutePaths.newMatch,
                   ),
                   onMyTeams: () => Navigator.push(
                     context,

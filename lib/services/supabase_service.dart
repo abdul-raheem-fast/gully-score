@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/admin_models.dart';
 import '../models/player_models.dart';
+import '../models/scoring_models.dart';
 
 class SupabaseService {
   const SupabaseService._();
@@ -124,6 +125,45 @@ class SupabaseService {
       'venue': match.venue,
       'status': _toDbStatus(match.status),
     }).eq('id', match.id);
+  }
+
+  static Future<void> createMatch(MatchSetup setup) async {
+    await client.from('matches').insert({
+      'id': setup.id,
+      'team_a_name': setup.teamA,
+      'team_b_name': setup.teamB,
+      'venue': setup.venue,
+      'overs': setup.overs,
+      'status': 'live',
+      'created_at': setup.date.toIso8601String(),
+    });
+  }
+
+  static Future<void> createInnings(InningsState innings, String matchId) async {
+    await client.from('innings').insert({
+      'match_id': matchId,
+      'innings_no': innings.inningsNo,
+      'batting_team': innings.battingTeam,
+      'bowling_team': innings.bowlingTeam,
+      'target_runs': innings.targetRuns,
+      'target_overs': innings.targetOvers,
+    });
+  }
+
+  static Future<void> createBall(Ball ball, String matchId, int inningsNo) async {
+    await client.from('balls').insert({
+      'match_id': matchId,
+      'innings_no': inningsNo,
+      'over_no': ball.overNo,
+      'ball_no': ball.ballNo,
+      'runs_off_bat': ball.runsOffBat,
+      'extra_runs': ball.extraRuns,
+      'extra_type': ball.extraType,
+      'is_wicket': ball.isWicket,
+      'wicket_type': ball.wicketType,
+      'wicket_player_name': ball.wicketPlayerName,
+      'commentary': ball.commentary,
+    });
   }
 
   static Future<List<AdminTeam>> fetchAdminTeams() async {
