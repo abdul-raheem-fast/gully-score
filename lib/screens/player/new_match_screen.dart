@@ -1,9 +1,9 @@
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../models/scoring_models.dart';
 import '../../route_paths.dart';
 import '../../services/supabase_service.dart';
+import '../../state/app_store.dart';
 import '../../theme/app_theme.dart';
 
 class NewMatchScreen extends StatefulWidget {
@@ -58,8 +58,14 @@ class _NewMatchScreenState extends State<NewMatchScreen> {
     for (final p in bowlers) { if (p.name == _bowler) p.isBowling = true; }
     final innings = InningsState(inningsNo: 1, battingTeam: batTeam, bowlingTeam: bowlTeam, batsmen: batsmen, bowlers: bowlers, targetOvers: setup.overs);
     final session = ScoringSession(setup: setup, innings1: innings, currentInningsNo: 1);
+
+    // Persist to local state so it appears in matches list immediately.
+    AppStore.of(context).saveScoringSession(session);
+
+    // Persist to backend (fire-and-forget).
     SupabaseService.createMatch(setup).catchError((_) {});
     SupabaseService.createInnings(innings, setup.id).catchError((_) {});
+
     Navigator.pushNamed(context, RoutePaths.liveScoring, arguments: session);
   }
 

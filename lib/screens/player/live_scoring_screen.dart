@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../models/admin_models.dart';
 import '../../models/scoring_models.dart';
 import '../../services/supabase_service.dart';
 import '../../state/app_store.dart';
@@ -281,7 +282,13 @@ class _LiveScoringScreenState extends State<LiveScoringScreen> {
   }
 
   void _checkInningsEnd() {
+    // All out or overs complete
     if (_inn.totalWickets >= _inn.batsmen.length - 1 || _inn.oversCompleted >= _inn.targetOvers) {
+      _endInnings();
+      return;
+    }
+    // Chase successful — 2nd innings team passed target
+    if (_s.currentInningsNo == 2 && _inn.targetRuns > 0 && _inn.totalRuns >= _inn.targetRuns) {
       _endInnings();
     }
   }

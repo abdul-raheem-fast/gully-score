@@ -438,24 +438,6 @@ class SupabaseService {
     return List<Map<String, dynamic>>.from(response);
   }
 
-  static Future<String> createInnings({
-    required String matchId,
-    required int inningsNo,
-    required String battingTeam,
-    required String bowlingTeam,
-  }) async {
-    final response = await client
-        .from('innings')
-        .insert({
-          'match_id': matchId,
-          'innings_no': inningsNo,
-          'batting_team': battingTeam,
-          'bowling_team': bowlingTeam,
-        })
-        .select('id')
-        .single();
-    return response['id'].toString();
-  }
 
   static Future<List<Map<String, dynamic>>> fetchInnings(String matchId) async {
     final response = await client
