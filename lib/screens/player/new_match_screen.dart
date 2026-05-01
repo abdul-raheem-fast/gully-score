@@ -122,8 +122,7 @@ class _NewMatchScreenState extends State<NewMatchScreen> {
       child: Row(children: [const Icon(Icons.calendar_today, color: C.g2, size: 20), const SizedBox(width: 12),
         Text('${_date.day.toString().padLeft(2,'0')} ${_monthName(_date.month)} ${_date.year}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: C.dark)),
         const Spacer(), const Icon(Icons.arrow_forward_ios, color: C.grey, size: 14)])),
-    ),
-  );
+    );
 
   Widget stepSquad(String team, List<TextEditingController> squad) => StatefulBuilder(builder: (ctx, setSt) {
     return SingleChildScrollView(padding: const EdgeInsets.all(20), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

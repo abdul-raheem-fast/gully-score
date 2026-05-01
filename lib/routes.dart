@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'models/scoring_models.dart';
 import 'route_paths.dart';
 
 import 'screens/admin/admin_dashboard_screen.dart';

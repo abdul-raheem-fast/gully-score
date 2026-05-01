@@ -1,4 +1,3 @@
-import 'dart:math';
 
 /// Individual ball record used during live scoring.
 class Ball {

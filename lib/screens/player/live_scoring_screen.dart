@@ -145,15 +145,25 @@ class _LiveScoringScreenState extends State<LiveScoringScreen> {
       ['Nb','Bye','Lb','Wicket'],
       ['Undo','Swap','Done'],
     ];
-    return _card(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text('SCORING PAD', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: C.grey)),
-      const SizedBox(height: 12),
-      ...rows.map((row) => Padding(padding: const EdgeInsets.only(bottom: 10), child: Row(children: row.map((label) => Expanded(child: Padding(
-        padding: EdgeInsets.only(right: label == row.last ? 0 : 8),
-        child: _scoreBtn(label),
-      ))).toList())),
-    ]));
+    return _card(
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('SCORING PAD', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: C.grey)),
+        const SizedBox(height: 12),
+        ...rows.map((row) => Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Row(
+            children: row.map((label) => Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(right: label == row.last ? 0 : 8),
+                child: _scoreBtn(label),
+              ),
+            )).toList(),
+          ),
+        )),
+      ]),
+    );
   }
+
 
   Widget _scoreBtn(String label) {
     VoidCallback? onTap;
