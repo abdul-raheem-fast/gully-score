@@ -21,10 +21,16 @@ class _MyTeamsScreenState extends State<MyTeamsScreen>
   String? _teamsError;
   String _search = '';
 
+  // ── Roster (team_players) ──
+  List<String> _rosterTeamNames = [];
+  bool _loadingRoster = true;
+
   // ── Captain panel ──
   List<Map<String, dynamic>> _pendingRequests = [];
   bool _loadingRequests = true;
   bool _isCaptain = false;
+
+  bool _membershipsBootstrapped = false;
 
   @override
   void initState() {
@@ -32,6 +38,18 @@ class _MyTeamsScreenState extends State<MyTeamsScreen>
     _tabCtrl = TabController(length: 2, vsync: this);
     _loadAllTeams();
     _loadCaptainData();
+    _loadRosterTeams();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_membershipsBootstrapped) return;
+    _membershipsBootstrapped = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      AppStore.of(context).refreshMyMemberships();
+    });
   }
 
   @override
@@ -47,7 +65,7 @@ class _MyTeamsScreenState extends State<MyTeamsScreen>
       _teamsError = null;
     });
     try {
-      final teams = await SupabaseService.fetchTeams();
+      final teams = await SupabaseService.fetchTeamsCatalog();
       if (!mounted) return;
       if (teams.isEmpty) {
         // fallback to local seed
@@ -94,16 +112,36 @@ class _MyTeamsScreenState extends State<MyTeamsScreen>
     try {
       final captainTeams = await SupabaseService.fetchCaptainTeams();
       if (!mounted) return;
-      _isCaptain = captainTeams.isNotEmpty;
-      if (_isCaptain) {
+      final isCap = captainTeams.isNotEmpty;
+      if (isCap) {
         final requests =
             await SupabaseService.fetchPendingRequestsForCaptain(captainTeams);
         if (!mounted) return;
-        setState(() => _pendingRequests = requests);
+        setState(() {
+          _isCaptain = true;
+          _pendingRequests = requests;
+        });
+      } else {
+        setState(() {
+          _isCaptain = false;
+          _pendingRequests = [];
+        });
       }
     } catch (_) {
     } finally {
       if (mounted) setState(() => _loadingRequests = false);
+    }
+  }
+
+  Future<void> _loadRosterTeams() async {
+    setState(() => _loadingRoster = true);
+    try {
+      final names = await SupabaseService.fetchTeamNamesWhereIAmRosterPlayer();
+      if (!mounted) return;
+      setState(() => _rosterTeamNames = names);
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _loadingRoster = false);
     }
   }
 
@@ -142,6 +180,16 @@ class _MyTeamsScreenState extends State<MyTeamsScreen>
   Widget build(BuildContext context) {
     final store = AppStore.of(context);
     final memberships = store.myMemberships;
+    final approvedMemberships = memberships
+        .where((m) => m.status == MembershipStatus.approved)
+        .toList();
+    final approvedNames = approvedMemberships.map((m) => m.teamName).toSet();
+    final rosterOnly =
+        _rosterTeamNames.where((n) => !approvedNames.contains(n)).toList();
+    final applications = memberships
+        .where((m) => m.status != MembershipStatus.approved)
+        .toList();
+    final myTeamsTabBadge = approvedMemberships.length + rosterOnly.length;
 
     return Scaffold(
       backgroundColor: C.bg,
@@ -178,27 +226,19 @@ class _MyTeamsScreenState extends State<MyTeamsScreen>
               labelStyle:
                   const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
               tabs: [
-                const Tab(text: 'Browse & Apply'),
                 Tab(
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Text('My Memberships'),
-                      if (memberships
-                          .where((m) => m.status == MembershipStatus.approved)
-                          .isNotEmpty) ...[
+                      const Text('My teams'),
+                      if (myTeamsTabBadge > 0) ...[
                         const SizedBox(width: 6),
-                        _Badge(
-                            memberships
-                                .where((m) =>
-                                    m.status == MembershipStatus.approved)
-                                .length
-                                .toString(),
-                            Colors.white),
-                      ]
+                        _Badge(myTeamsTabBadge.toString(), Colors.white),
+                      ],
                     ],
                   ),
                 ),
+                const Tab(text: 'Discover & apply'),
               ],
             ),
           ),
@@ -206,60 +246,48 @@ class _MyTeamsScreenState extends State<MyTeamsScreen>
         body: TabBarView(
           controller: _tabCtrl,
           children: [
-            // ── Tab 1: Browse & Apply ──
-            _BrowseTab(
-              allTeams: _allTeams,
-              memberships: memberships,
-              loading: _loadingTeams,
-              error: _teamsError,
-              search: _search,
-              onSearchChanged: (v) => setState(() => _search = v),
-              onApply: (team) async {
-                await store.applyToTeam(team);
-                if (!mounted) return;
-                final messenger = ScaffoldMessenger.of(context);
-                messenger.showSnackBar(_snack(
-                  'Applied to ${team.name}! Waiting for captain approval.',
-                  C.g2,
-                ));
-                setState(() {}); // refresh applied badges
-              },
-              onRefresh: _loadAllTeams,
-            ),
-
-            // ── Tab 2: My Memberships + Captain Panel ──
+            // ── Tab 1: My teams (DB memberships + roster + captain) ──
             RefreshIndicator(
               color: C.g2,
               onRefresh: () async {
                 await _refreshMemberships();
+                await _loadRosterTeams();
                 await _loadCaptainData();
               },
               child: ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  // ── My memberships ──
-                  _SectionHeader('My Memberships'),
+                  const _SectionHeader('Your teams'),
                   const SizedBox(height: 8),
-                  if (store.isLoadingMemberships)
+                  if (store.isLoadingMemberships || _loadingRoster)
                     const _Loader()
-                  else if (memberships.isEmpty)
+                  else if (approvedMemberships.isEmpty && rosterOnly.isEmpty)
                     _EmptyHint(
                       icon: Icons.groups_2_outlined,
-                      label: "You haven't applied to any team yet.",
+                      label: applications.any((m) =>
+                              m.status == MembershipStatus.pending)
+                          ? 'No approved memberships yet. Pending applications are below.'
+                          : 'You are not on a team yet. Open Discover & apply to join one.',
                     )
-                  else
-                    ...memberships.map((m) => _MembershipCard(membership: m)),
-
+                  else ...[
+                    ...approvedMemberships
+                        .map((m) => _MembershipCard(membership: m)),
+                    ...rosterOnly.map((n) => _RosterOnlyCard(teamName: n)),
+                  ],
+                  if (applications.isNotEmpty) ...[
+                    const SizedBox(height: 24),
+                    const _SectionHeader('Applications'),
+                    const SizedBox(height: 8),
+                    ...applications.map((m) => _MembershipCard(membership: m)),
+                  ],
                   const SizedBox(height: 24),
-
-                  // ── Captain panel (only if user is a captain) ──
                   if (_isCaptain) ...[
-                    _SectionHeader('Captain Panel — Pending Requests'),
+                    const _SectionHeader('Captain — pending requests'),
                     const SizedBox(height: 8),
                     if (_loadingRequests)
                       const _Loader()
                     else if (_pendingRequests.isEmpty)
-                      _EmptyHint(
+                      const _EmptyHint(
                         icon: Icons.inbox_outlined,
                         label: 'No pending join requests for your team(s).',
                       )
@@ -274,6 +302,30 @@ class _MyTeamsScreenState extends State<MyTeamsScreen>
                   ],
                 ],
               ),
+            ),
+
+            // ── Tab 2: Discover & apply ──
+            _BrowseTab(
+              allTeams: _allTeams,
+              memberships: memberships,
+              loading: _loadingTeams,
+              error: _teamsError,
+              search: _search,
+              onSearchChanged: (v) => setState(() => _search = v),
+              onApply: (team) async {
+                final messenger = ScaffoldMessenger.of(context);
+                await store.applyToTeam(team);
+                if (!mounted) return;
+                messenger.showSnackBar(_snack(
+                  'Applied to ${team.name}! Waiting for captain approval.',
+                  C.g2,
+                ));
+                setState(() {});
+              },
+              onRefresh: () async {
+                await _loadAllTeams();
+                await _refreshMemberships();
+              },
             ),
           ],
         ),
@@ -549,6 +601,76 @@ class _MembershipCard extends StatelessWidget {
   }
 
   String _fmtDate(DateTime d) => '${d.day}/${d.month}/${d.year}';
+}
+
+/// Shown when the user's name is on `team_players` but there is no approved membership row.
+class _RosterOnlyCard extends StatelessWidget {
+  final String teamName;
+  const _RosterOnlyCard({required this.teamName});
+
+  @override
+  Widget build(BuildContext context) {
+    final abbr = _abbrFromTeamName(teamName);
+    const color = Color(0xFF1565C0);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      decoration: BoxDecoration(
+        color: C.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withAlpha(40)),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withAlpha(8),
+              blurRadius: 8,
+              offset: const Offset(0, 2))
+        ],
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Row(children: [
+        Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: color.withAlpha(18),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Center(
+            child: Text(abbr,
+                style: const TextStyle(
+                    color: color,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900)),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(teamName,
+                style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: C.dark)),
+            Text(
+              'Listed on team roster',
+              style: TextStyle(fontSize: 11, color: Colors.blue.shade800),
+            ),
+          ]),
+        ),
+        Icon(Icons.list_alt_rounded, size: 18, color: Colors.blue.shade700),
+      ]),
+    );
+  }
+}
+
+String _abbrFromTeamName(String name) {
+  final parts =
+      name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+  final t = name.trim();
+  if (t.length >= 3) return t.substring(0, 3).toUpperCase();
+  return t.toUpperCase();
 }
 
 // ── Captain request card ─────────────────────────────────────────

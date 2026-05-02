@@ -4,6 +4,7 @@ import '../../models/player_models.dart';
 import '../../state/app_store.dart';
 import '../../theme/app_theme.dart';
 import '../../route_paths.dart';
+import 'match_scorecard_screen.dart' show MatchScorecardRouteArgs;
 import 'player_matches_screen.dart';
 import 'player_stats_screen.dart';
 import 'player_profile_screen.dart';
@@ -377,7 +378,26 @@ class _DashboardTabState extends State<_DashboardTab>
                 (context, i) => Padding(
                   padding: EdgeInsets.fromLTRB(
                       20, 0, 20, i == recent.length - 1 ? 24 : 12),
-                  child: _MatchCard(match: recent[i]),
+                  child: _MatchCard(
+                    match: recent[i],
+                    onOpenScorecard: () {
+                      AdminMatch? snap;
+                      for (final m in store.matches) {
+                        if (m.id == recent[i].id) {
+                          snap = m;
+                          break;
+                        }
+                      }
+                      Navigator.pushNamed(
+                        context,
+                        RoutePaths.matchScorecard,
+                        arguments: MatchScorecardRouteArgs(
+                          matchId: recent[i].id,
+                          snapshot: snap,
+                        ),
+                      );
+                    },
+                  ),
                 ),
                 childCount: recent.length,
               ),
@@ -423,9 +443,15 @@ class _DashboardTabState extends State<_DashboardTab>
   }
 
   List<PlayerMatch> _deriveRecentMatches(AppStoreState store) {
-    final matches = store.matches.take(3).toList();
-    if (matches.isEmpty) return const [];
-    return matches.map((m) {
+    if (store.matches.isEmpty) return const [];
+    final sorted = List<AdminMatch>.from(store.matches)
+      ..sort((a, b) {
+        final byDate = b.date.compareTo(a.date);
+        if (byDate != 0) return byDate;
+        return b.id.compareTo(a.id);
+      });
+    final pool = sorted.take(3).toList();
+    return pool.map((m) {
       final result =
           m.status == MatchStatus.completed ? MatchResult.won : MatchResult.draw;
       return PlayerMatch(
@@ -436,9 +462,11 @@ class _DashboardTabState extends State<_DashboardTab>
         opponentAbbr: _abbr(m.teamB),
         myTeamScore: m.scoreA,
         opponentScore: m.scoreB,
-        overs: 'TBD',
+        overs: m.overs != null ? '${m.overs} ov' : 'TBD',
         result: result,
-        summary: '${m.teamA} vs ${m.teamB} at ${m.venue}',
+        summary: m.result != null && m.result!.isNotEmpty
+            ? m.result!
+            : '${m.teamA} vs ${m.teamB} at ${m.venue}',
         date: m.date,
         format: 'League',
       );
@@ -796,7 +824,8 @@ class _QuickActionTileState extends State<_QuickActionTile>
 // ─────────────────────────────────────────────────────────────
 class _MatchCard extends StatelessWidget {
   final PlayerMatch match;
-  const _MatchCard({required this.match});
+  final VoidCallback onOpenScorecard;
+  const _MatchCard({required this.match, required this.onOpenScorecard});
 
   @override
   Widget build(BuildContext context) {
@@ -807,20 +836,25 @@ class _MatchCard extends StatelessWidget {
     final dateStr =
         '${_monthName(match.date.month)} ${match.date.day}, ${match.date.year}';
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: C.white,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onOpenScorecard,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(10),
-            blurRadius: 12,
-            offset: const Offset(0, 3),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: C.white,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withAlpha(10),
+                blurRadius: 12,
+                offset: const Offset(0, 3),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Column(
+          child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Date / format row
@@ -897,6 +931,8 @@ class _MatchCard extends StatelessWidget {
                 fontWeight: FontWeight.w600),
           ),
         ],
+      ),
+        ),
       ),
     );
   }

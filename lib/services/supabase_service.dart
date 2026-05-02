@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/admin_models.dart';
@@ -6,6 +8,23 @@ import '../models/scoring_models.dart';
 
 class SupabaseService {
   const SupabaseService._();
+
+  /// Use for new rows when `matches.id` is a Postgres `uuid` (PostgREST rejects `m_…` style ids).
+  static String newMatchId() {
+    final r = Random.secure();
+    final b = List<int>.generate(16, (_) => r.nextInt(256));
+    b[6] = (b[6] & 0x0f) | 0x40;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    final h = b.map((e) => e.toRadixString(16).padLeft(2, '0')).join();
+    return '${h.substring(0, 8)}-${h.substring(8, 12)}-${h.substring(12, 16)}-${h.substring(16, 20)}-${h.substring(20, 32)}';
+  }
+
+  static bool _isUuidString(String id) {
+    final u = id.trim().toLowerCase();
+    return RegExp(
+      r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+    ).hasMatch(u);
+  }
 
   static SupabaseClient get client => Supabase.instance.client;
   static User? get currentUser => client.auth.currentUser;
@@ -118,6 +137,70 @@ class SupabaseService {
     return rows.map(_rowToAdminMatch).toList();
   }
 
+  static Future<AdminMatch?> fetchMatchById(String matchId) async {
+    final id = matchId.trim();
+    if (id.isEmpty) return null;
+    // Avoid GET …&id=eq.m_… which returns 400 when the column is uuid.
+    if (_isUuidString(id)) {
+      try {
+        final response =
+            await client.from('matches').select().eq('id', id).limit(1);
+        final rows = List<Map<String, dynamic>>.from(response);
+        if (rows.isNotEmpty) return _rowToAdminMatch(rows.first);
+      } catch (_) {}
+    }
+    try {
+      final all = await fetchAdminMatches();
+      for (final m in all) {
+        if (m.id == id || m.id.toLowerCase() == id.toLowerCase()) return m;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  static Future<List<Map<String, dynamic>>> tryFetchInnings(String matchId) async {
+    try {
+      return await fetchInnings(matchId.trim());
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> tryFetchBallsByMatch(
+    String matchId,
+  ) async {
+    try {
+      return await fetchBallsByMatch(matchId.trim());
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> tryFetchPlayersByMatch(
+    String matchId,
+  ) async {
+    try {
+      return await fetchPlayersByMatch(matchId.trim());
+    } catch (_) {
+      return [];
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> fetchBallsByMatch(
+    String matchId,
+  ) async {
+    final mid = matchId.trim();
+    if (!_isUuidString(mid)) return [];
+    final response = await client
+        .from('balls')
+        .select()
+        .eq('match_id', mid)
+        .order('innings_no', ascending: true)
+        .order('over_no', ascending: true)
+        .order('ball_no', ascending: true);
+    return List<Map<String, dynamic>>.from(response);
+  }
+
   static Future<void> updateAdminMatch(AdminMatch match) async {
     await client.from('matches').update({
       'team_a_name': match.teamA,
@@ -128,10 +211,12 @@ class SupabaseService {
       'score_b': match.scoreB,
       'result': match.result,
       'winner': match.winner,
+      if (match.overs != null) 'overs': match.overs,
     }).eq('id', match.id);
   }
 
   static Future<void> createMatch(MatchSetup setup) async {
+    // Use insertion time for created_at so lists ordered by created_at show new matches first.
     await client.from('matches').insert({
       'id': setup.id,
       'team_a_name': setup.teamA,
@@ -139,7 +224,7 @@ class SupabaseService {
       'venue': setup.venue,
       'overs': setup.overs,
       'status': 'live',
-      'created_at': setup.date.toIso8601String(),
+      'created_at': DateTime.now().toIso8601String(),
     });
   }
 
@@ -264,6 +349,161 @@ class SupabaseService {
         .toList();
   }
 
+  /// Roster row counts from `team_players` (official team registry).
+  static Future<Map<String, int>> _teamRosterCountsByName() async {
+    try {
+      final response = await client.from('team_players').select('team_name');
+      final rows = List<Map<String, dynamic>>.from(response);
+      final out = <String, int>{};
+      for (final r in rows) {
+        final t = (r['team_name'] as String?)?.trim() ?? '';
+        if (t.isEmpty) continue;
+        out[t] = (out[t] ?? 0) + 1;
+      }
+      return out;
+    } catch (_) {
+      return {};
+    }
+  }
+
+  /// Teams defined in `public.teams` (may exist without any `matches` / `players` rows).
+  static Future<List<TeamInfo>> fetchTeamsRegistry() async {
+    try {
+      final teamsResp = await client
+          .from('teams')
+          .select('id,name,abbreviation,captain_name')
+          .order('name');
+      final teamsRows = List<Map<String, dynamic>>.from(teamsResp);
+      if (teamsRows.isEmpty) return [];
+      final counts = await _teamRosterCountsByName();
+      final list = <TeamInfo>[];
+      for (final row in teamsRows) {
+        final name = (row['name'] as String?)?.trim() ?? '';
+        if (name.isEmpty) continue;
+        final abbrRaw = (row['abbreviation'] as String?)?.trim() ?? '';
+        final abbr = abbrRaw.isNotEmpty ? abbrRaw : _abbreviation(name);
+        final cap = (row['captain_name'] as String?)?.trim() ?? '';
+        list.add(
+          TeamInfo(
+            id: row['id']?.toString() ?? name,
+            name: name,
+            abbreviation: abbr,
+            captain: cap.isNotEmpty ? cap : 'Captain',
+            playerCount: counts[name] ?? 0,
+            matchCount: 0,
+          ),
+        );
+      }
+      return list;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Discoverable teams: match-derived list merged with `public.teams` (deduped by name).
+  static Future<List<TeamInfo>> fetchTeamsCatalog() async {
+    final legacy = await fetchTeams();
+    final registry = await fetchTeamsRegistry();
+    final byName = <String, TeamInfo>{};
+    for (final t in legacy) {
+      byName[t.name] = t;
+    }
+    for (final t in registry) {
+      final existing = byName[t.name];
+      if (existing != null) {
+        byName[t.name] = TeamInfo(
+          id: t.id,
+          name: t.name,
+          abbreviation: t.abbreviation.isNotEmpty ? t.abbreviation : existing.abbreviation,
+          captain: t.captain != 'Captain' ? t.captain : existing.captain,
+          playerCount: t.playerCount > 0 ? t.playerCount : existing.playerCount,
+          matchCount: existing.matchCount,
+        );
+      } else {
+        byName[t.name] = t;
+      }
+    }
+    final merged = byName.values.toList();
+    merged.sort(
+      (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+    );
+    return merged;
+  }
+
+  /// Team names where the signed-in user's display name appears on `team_players`.
+  static Future<List<String>> fetchTeamNamesWhereIAmRosterPlayer() async {
+    final name = getCurrentUserName()?.trim();
+    if (name == null || name.isEmpty) return [];
+    try {
+      final response = await client
+          .from('team_players')
+          .select('team_name')
+          .eq('player_name', name);
+      final rows = List<Map<String, dynamic>>.from(response);
+      final out = <String>{};
+      for (final r in rows) {
+        final t = (r['team_name'] as String?)?.trim() ?? '';
+        if (t.isNotEmpty) out.add(t);
+      }
+      return out.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Inserts `teams` and `team_players` rows (see `20260501_teams_table.sql`).
+  static Future<void> createTeam({
+    required String name,
+    required String abbreviation,
+    required String captainName,
+    required List<String> playerNames,
+  }) async {
+    final userId = currentUser?.id;
+    if (userId == null) throw Exception('Not authenticated');
+
+    final teamName = name.trim();
+    if (teamName.isEmpty) throw Exception('Team name required');
+
+    final cap = captainName.trim();
+    final seen = <String>{};
+    final roster = <String>[];
+
+    void addPlayer(String raw) {
+      final p = raw.trim();
+      if (p.isEmpty || seen.contains(p)) return;
+      seen.add(p);
+      roster.add(p);
+    }
+
+    if (cap.isNotEmpty) addPlayer(cap);
+    for (final p in playerNames) {
+      addPlayer(p);
+    }
+
+    if (roster.isEmpty) throw Exception('Add at least one player');
+
+    final captainResolved = cap.isNotEmpty ? cap : roster.first;
+
+    await client.from('teams').insert({
+      'name': teamName,
+      'abbreviation': abbreviation.trim(),
+      'captain_user_id': userId,
+      'captain_name': captainResolved,
+    });
+
+    await client.from('team_players').insert(
+      roster
+          .map(
+            (p) => {
+              'team_name': teamName,
+              'player_name': p,
+              'is_captain': p == captainResolved,
+            },
+          )
+          .toList(),
+    );
+  }
+
   /// Apply for membership in [teamName]. Stores a row in `team_memberships`.
   /// Uses insert first; if a row already exists (conflict) it updates instead.
   static Future<void> applyToTeam({
@@ -337,22 +577,36 @@ class SupabaseService {
     }).toList();
   }
 
-  /// Returns team names where the current user is recorded as captain
-  /// in the `players` table.
+  /// Returns team names where the current user is captain in `players` or in `teams`.
   static Future<List<String>> fetchCaptainTeams() async {
     final userId = currentUser?.id;
+    if (userId == null) return [];
+    final names = <String>{};
     final userName = getCurrentUserName();
-    if (userId == null || userName == null || userName.isEmpty) return [];
-    final response = await client
-        .from('players')
-        .select('team_name')
-        .eq('player_name', userName)
-        .eq('is_captain', true);
-    final rows = List<Map<String, dynamic>>.from(response);
-    return rows
-        .map((r) => (r['team_name'] as String?) ?? '')
-        .where((t) => t.isNotEmpty)
-        .toList();
+    if (userName != null && userName.isNotEmpty) {
+      final response = await client
+          .from('players')
+          .select('team_name')
+          .eq('player_name', userName)
+          .eq('is_captain', true);
+      final rows = List<Map<String, dynamic>>.from(response);
+      for (final r in rows) {
+        final t = (r['team_name'] as String?)?.trim() ?? '';
+        if (t.isNotEmpty) names.add(t);
+      }
+    }
+    try {
+      final teamsResp = await client
+          .from('teams')
+          .select('name')
+          .eq('captain_user_id', userId);
+      for (final row in List<Map<String, dynamic>>.from(teamsResp)) {
+        final n = (row['name'] as String?)?.trim() ?? '';
+        if (n.isNotEmpty) names.add(n);
+      }
+    } catch (_) {}
+    return names.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
   }
 
   /// Returns pending join requests for teams where the current user is captain.
@@ -434,20 +688,24 @@ class SupabaseService {
   static Future<List<Map<String, dynamic>>> fetchPlayersByMatch(
     String matchId,
   ) async {
+    final mid = matchId.trim();
+    if (!_isUuidString(mid)) return [];
     final response = await client
         .from('players')
         .select()
-        .eq('match_id', matchId)
+        .eq('match_id', mid)
         .order('created_at', ascending: true);
     return List<Map<String, dynamic>>.from(response);
   }
 
 
   static Future<List<Map<String, dynamic>>> fetchInnings(String matchId) async {
+    final mid = matchId.trim();
+    if (!_isUuidString(mid)) return [];
     final response = await client
         .from('innings')
         .select()
-        .eq('match_id', matchId)
+        .eq('match_id', mid)
         .order('innings_no', ascending: true);
     return List<Map<String, dynamic>>.from(response);
   }
@@ -519,6 +777,22 @@ class SupabaseService {
       flagged: false,
       result: result,
       winner: winner,
+      overs: (row['overs'] as num?)?.toInt(),
+    );
+  }
+
+  static Ball ballFromRow(Map<String, dynamic> row, int id) {
+    return Ball(
+      id: id,
+      overNo: (row['over_no'] as num?)?.toInt() ?? 0,
+      ballNo: (row['ball_no'] as num?)?.toInt() ?? 0,
+      runsOffBat: (row['runs_off_bat'] as num?)?.toInt() ?? 0,
+      extraRuns: (row['extra_runs'] as num?)?.toInt() ?? 0,
+      extraType: row['extra_type'] as String?,
+      isWicket: row['is_wicket'] == true,
+      wicketType: row['wicket_type'] as String?,
+      wicketPlayerName: row['wicket_player_name'] as String?,
+      commentary: row['commentary'] as String?,
     );
   }
 

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/scoring_models.dart';
+import '../../route_paths.dart';
 import '../../services/supabase_service.dart';
 import '../../state/app_store.dart';
 import '../../theme/app_theme.dart';
@@ -23,13 +24,24 @@ class _LiveScoringScreenState extends State<LiveScoringScreen> {
 
   InningsState get _inn => _s.currentInnings!;
 
+  Future<void> _finishMatchAndReturnHome() async {
+    if (!mounted) return;
+    final store = AppStore.of(context);
+    store.saveScoringSession(_s);
+    await store.refreshMatches();
+    if (!mounted) return;
+    // Clear stacked routes (e.g. New match, Live scoring) and land on player home.
+    // popUntil(isFirst) wrongly stops at RoleSelect under Home when that was never replaced.
+    Navigator.of(context).pushNamedAndRemoveUntil(
+      RoutePaths.home,
+      (route) => false,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_s.isCompleted) {
-      return _MatchResultScreen(session: _s, onDone: () {
-        AppStore.of(context).saveScoringSession(_s);
-        Navigator.pop(context);
-      });
+      return _MatchResultScreen(session: _s, onDone: _finishMatchAndReturnHome);
     }
     return Scaffold(
       backgroundColor: C.bg,
@@ -189,7 +201,9 @@ class _LiveScoringScreenState extends State<LiveScoringScreen> {
       case 'Wicket': onTap = _showWicketDialog; break;
       case 'Undo': onTap = _undo; break;
       case 'Swap': onTap = _swapStrikers; break;
-      case 'Done': onTap = _s.isCompleted ? () { AppStore.of(context).saveScoringSession(_s); Navigator.pop(context); } : null; break;
+      case 'Done':
+        onTap = _s.isCompleted ? _finishMatchAndReturnHome : null;
+        break;
     }
     return Material(
       color: bg,
@@ -443,7 +457,7 @@ class _LiveScoringScreenState extends State<LiveScoringScreen> {
 // ─────────────────────────────────────────────────────────────
 class _MatchResultScreen extends StatelessWidget {
   final ScoringSession session;
-  final VoidCallback onDone;
+  final Future<void> Function() onDone;
   const _MatchResultScreen({required this.session, required this.onDone});
 
   @override
@@ -515,7 +529,7 @@ class _MatchResultScreen extends StatelessWidget {
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
               child: ElevatedButton.icon(
-                onPressed: onDone,
+                onPressed: () => onDone(),
                 icon: const Icon(Icons.home_rounded),
                 label: const Text('Back to Home', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
                 style: ElevatedButton.styleFrom(

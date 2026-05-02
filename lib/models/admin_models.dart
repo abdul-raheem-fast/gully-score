@@ -14,6 +14,8 @@ class AdminMatch {
   final String? result;
   /// Name of the winning team (empty string = tie/not decided).
   final String? winner;
+  /// Match overs limit when stored on the row (e.g. 20 for T20).
+  final int? overs;
 
   const AdminMatch({
     required this.id,
@@ -27,6 +29,7 @@ class AdminMatch {
     this.flagged = false,
     this.result,
     this.winner,
+    this.overs,
   });
 
   AdminMatch copyWith({
@@ -41,6 +44,7 @@ class AdminMatch {
     bool? flagged,
     String? result,
     String? winner,
+    int? overs,
   }) {
     return AdminMatch(
       id: id ?? this.id,
@@ -54,6 +58,7 @@ class AdminMatch {
       flagged: flagged ?? this.flagged,
       result: result ?? this.result,
       winner: winner ?? this.winner,
+      overs: overs ?? this.overs,
     );
   }
 }

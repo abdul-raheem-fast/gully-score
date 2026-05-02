@@ -104,9 +104,24 @@ class AppStoreState extends State<AppStore> {
       final remoteMatches = await SupabaseService.fetchAdminMatches();
       if (!mounted) return;
       setState(() {
+        final byId = <String, AdminMatch>{};
+        for (final m in remoteMatches) {
+          byId[m.id] = m;
+        }
+        // Keep matches that exist only locally (e.g. RLS returned nothing, or sync lag)
+        // so "Recent" does not go blank after refresh.
+        for (final local in _matches) {
+          byId.putIfAbsent(local.id, () => local);
+        }
+        final merged = byId.values.toList()
+          ..sort((a, b) {
+            final c = b.date.compareTo(a.date);
+            if (c != 0) return c;
+            return b.id.compareTo(a.id);
+          });
         _matches
           ..clear()
-          ..addAll(remoteMatches);
+          ..addAll(merged);
       });
     } catch (e) {
       if (!mounted) return;
@@ -409,6 +424,7 @@ class AppStoreState extends State<AppStore> {
       status: session.isCompleted ? MatchStatus.completed : MatchStatus.live,
       result: session.result,
       winner: _deriveWinner(session),
+      overs: session.setup.overs,
     );
     setState(() {
       final idx = _matches.indexWhere((m) => m.id == match.id);

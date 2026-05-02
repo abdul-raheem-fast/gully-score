@@ -16,6 +16,7 @@ import 'screens/splash_screen.dart';
 import 'screens/player/player_home_screen.dart';
 import 'screens/player/new_match_screen.dart';
 import 'screens/player/live_scoring_screen.dart';
+import 'screens/player/match_scorecard_screen.dart';
 
 /// Central app route definitions.
 class AppRoutes {
@@ -39,6 +40,20 @@ class AppRoutes {
       case RoutePaths.liveScoring:
         final args = settings.arguments as ScoringSession?;
         page = args == null ? const PlayerHomeScreen() : LiveScoringScreen(session: args);
+        break;
+      case RoutePaths.matchScorecard:
+        final raw = settings.arguments;
+        if (raw is MatchScorecardRouteArgs &&
+            raw.matchId.trim().isNotEmpty) {
+          page = MatchScorecardScreen(
+            matchId: raw.matchId.trim(),
+            initialSnapshot: raw.snapshot,
+          );
+        } else if (raw is String && raw.trim().isNotEmpty) {
+          page = MatchScorecardScreen(matchId: raw.trim());
+        } else {
+          page = const PlayerHomeScreen();
+        }
         break;
     }
     if (page == null) return null;

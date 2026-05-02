@@ -17,4 +17,5 @@ class RoutePaths {
 
   static const newMatch = '/player/new-match';
   static const liveScoring = '/player/live-scoring';
+  static const matchScorecard = '/player/match-scorecard';
 }

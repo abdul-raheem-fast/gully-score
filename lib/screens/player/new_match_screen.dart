@@ -41,7 +41,7 @@ class _NewMatchScreenState extends State<NewMatchScreen> {
 
   void _start() {
     final setup = MatchSetup(
-      id: 'm_${DateTime.now().millisecondsSinceEpoch}',
+      id: SupabaseService.newMatchId(),
       teamA: _teamA.text.trim(), teamB: _teamB.text.trim(), venue: _venue.text.trim(),
       overs: int.tryParse(_overs.text.trim()) ?? 20, format: _format, date: _date,
       tossWinner: _tossWinner, electedTo: _electedTo,

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../../models/admin_models.dart';
+import '../../route_paths.dart';
 import '../../state/app_store.dart';
+import 'match_scorecard_screen.dart' show MatchScorecardRouteArgs;
 import '../../theme/app_theme.dart';
 
 class PlayerMatchesScreen extends StatelessWidget {
@@ -109,7 +111,17 @@ class PlayerMatchesScreen extends StatelessWidget {
                   delegate: SliverChildBuilderDelegate(
                     (ctx, i) => Padding(
                       padding: const EdgeInsets.only(bottom: 12),
-                      child: _MatchTile(match: live[i]),
+                      child: _MatchTile(
+                        match: live[i],
+                        onTap: () => Navigator.pushNamed(
+                          ctx,
+                          RoutePaths.matchScorecard,
+                          arguments: MatchScorecardRouteArgs(
+                            matchId: live[i].id,
+                            snapshot: live[i],
+                          ),
+                        ),
+                      ),
                     ),
                     childCount: live.length,
                   ),
@@ -126,7 +138,17 @@ class PlayerMatchesScreen extends StatelessWidget {
                   delegate: SliverChildBuilderDelegate(
                     (ctx, i) => Padding(
                       padding: const EdgeInsets.only(bottom: 12),
-                      child: _MatchTile(match: completed[i]),
+                      child: _MatchTile(
+                        match: completed[i],
+                        onTap: () => Navigator.pushNamed(
+                          ctx,
+                          RoutePaths.matchScorecard,
+                          arguments: MatchScorecardRouteArgs(
+                            matchId: completed[i].id,
+                            snapshot: completed[i],
+                          ),
+                        ),
+                      ),
                     ),
                     childCount: completed.length,
                   ),
@@ -143,7 +165,17 @@ class PlayerMatchesScreen extends StatelessWidget {
                   delegate: SliverChildBuilderDelegate(
                     (ctx, i) => Padding(
                       padding: const EdgeInsets.only(bottom: 12),
-                      child: _MatchTile(match: upcoming[i]),
+                      child: _MatchTile(
+                        match: upcoming[i],
+                        onTap: () => Navigator.pushNamed(
+                          ctx,
+                          RoutePaths.matchScorecard,
+                          arguments: MatchScorecardRouteArgs(
+                            matchId: upcoming[i].id,
+                            snapshot: upcoming[i],
+                          ),
+                        ),
+                      ),
                     ),
                     childCount: upcoming.length,
                   ),
@@ -173,7 +205,8 @@ class PlayerMatchesScreen extends StatelessWidget {
 
 class _MatchTile extends StatelessWidget {
   final AdminMatch match;
-  const _MatchTile({required this.match});
+  final VoidCallback onTap;
+  const _MatchTile({required this.match, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -200,19 +233,24 @@ class _MatchTile extends StatelessWidget {
       chipLabel = 'SOON';
     }
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: C.white,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withAlpha(10),
-              blurRadius: 10,
-              offset: const Offset(0, 3)),
-        ],
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: C.white,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.black.withAlpha(10),
+                  blurRadius: 10,
+                  offset: const Offset(0, 3)),
+            ],
+          ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         // Top row: date + status chip
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           Text('$dateStr  •  ${match.venue}',
@@ -273,6 +311,8 @@ class _MatchTile extends StatelessWidget {
           ]),
         ],
       ]),
+        ),
+      ),
     );
   }
 
