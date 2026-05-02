@@ -20,13 +20,20 @@ class PlayerHomeScreen extends StatefulWidget {
 
 class _PlayerHomeScreenState extends State<PlayerHomeScreen> {
   int _tab = 0;
+  late final List<Widget> _tabs;
 
-  final _tabs = const [
-    _DashboardTab(),
-    PlayerMatchesScreen(),
-    PlayerStatsScreen(),
-    PlayerProfileScreen(),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _tabs = [
+      _DashboardTab(onOpenStats: _openStatsTab),
+      const PlayerMatchesScreen(),
+      const PlayerStatsScreen(),
+      const PlayerProfileScreen(),
+    ];
+  }
+
+  void _openStatsTab() => setState(() => _tab = 2);
 
   @override
   Widget build(BuildContext context) {
@@ -52,7 +59,7 @@ class _BottomNav extends StatelessWidget {
   static const _items = [
     _NavItem(Icons.home_outlined, Icons.home_rounded, 'Home'),
     _NavItem(Icons.sports_cricket_outlined, Icons.sports_cricket, 'Matches'),
-    _NavItem(Icons.bar_chart_outlined, Icons.bar_chart_rounded, 'Stats'),
+    _NavItem(Icons.bolt_outlined, Icons.bolt_rounded, 'Stats'),
     _NavItem(Icons.person_outline_rounded, Icons.person_rounded, 'Profile'),
   ];
 
@@ -187,7 +194,8 @@ class _NavTile extends StatelessWidget {
 //  DASHBOARD TAB
 // ─────────────────────────────────────────────────────────────
 class _DashboardTab extends StatefulWidget {
-  const _DashboardTab();
+  final VoidCallback onOpenStats;
+  const _DashboardTab({required this.onOpenStats});
 
   @override
   State<_DashboardTab> createState() => _DashboardTabState();
@@ -332,10 +340,7 @@ class _DashboardTabState extends State<_DashboardTab>
                     MaterialPageRoute(
                         builder: (_) => const MyTeamsScreen()),
                   ),
-                  onAnalytics: () =>
-                      ScaffoldMessenger.of(context).showSnackBar(
-                    _snack('Analytics — coming soon'),
-                  ),
+                  onAnalytics: widget.onOpenStats,
                   onRankings: () => ScaffoldMessenger.of(context).showSnackBar(
                     _snack('Rankings — coming soon'),
                   ),
