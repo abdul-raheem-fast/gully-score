@@ -319,9 +319,20 @@ class _LiveScoringScreenState extends State<LiveScoringScreen> {
       final bowlTeam = _s.setup.battingFirst;
       final batSquad = batTeam == _s.setup.teamA ? _s.setup.teamAPlayers : _s.setup.teamBPlayers;
       final bowlSquad = bowlTeam == _s.setup.teamA ? _s.setup.teamAPlayers : _s.setup.teamBPlayers;
+      // Use explicit mutable lists — const [] (the default) is unmodifiable and
+      // would throw when _recordBall tries to call balls.add() in innings 2.
       final batsmen = batSquad.map((n) => PlayerInMatch(name: n)).toList();
       final bowlers = bowlSquad.map((n) => PlayerInMatch(name: n)).toList();
-      final inn2 = InningsState(inningsNo: 2, battingTeam: batTeam, bowlingTeam: bowlTeam, batsmen: batsmen, bowlers: bowlers, targetRuns: target, targetOvers: _s.setup.overs);
+      final inn2 = InningsState(
+        inningsNo: 2,
+        battingTeam: batTeam,
+        bowlingTeam: bowlTeam,
+        batsmen: batsmen,
+        bowlers: bowlers,
+        balls: [],          // explicit mutable list — IMPORTANT
+        targetRuns: target,
+        targetOvers: _s.setup.overs,
+      );
       _s.innings2 = inn2;
       _s.currentInningsNo = 2;
       SupabaseService.createInnings(inn2, _s.setup.id).catchError((_) {});
@@ -403,21 +414,37 @@ class _LiveScoringScreenState extends State<LiveScoringScreen> {
 
   void _pickOpenersDialog() {
     final batters = _inn.batsmen.map((p) => p.name).toList();
-    final bowlers = _inn.bowlers.map((p) => p.name).toList();
+    final bowlerNames = _inn.bowlers.map((p) => p.name).toList();
     String? s, ns, b;
-    showDialog(context: context, barrierDismissible: false, builder: (ctx) => StatefulBuilder(builder: (c, setD) => AlertDialog(
-      title: const Text('Select Openers & Bowler'),
-      content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Text('Striker', style: TextStyle(fontSize: 12, color: C.grey)), const SizedBox(height: 4),
-        DropdownButtonFormField<String>(isExpanded: true, value: s, hint: const Text('Select'), items: batters.map((n) => DropdownMenuItem(value: n, child: Text(n))).toList(), onChanged: (v) => setD(() => s = v)),
-        const SizedBox(height: 10),
-        Text('Non-Striker', style: TextStyle(fontSize: 12, color: C.grey)), const SizedBox(height: 4),
-        DropdownButtonFormField<String>(isExpanded: true, value: ns, hint: const Text('Select'), items: batters.map((n) => DropdownMenuItem(value: n, child: Text(n))).toList(), onChanged: (v) => setD(() => ns = v)),
-        const SizedBox(height: 10),
-        Text('Opening Bowler', style: TextStyle(fontSize: 12, color: C.grey)), const SizedBox(height: 4),
-        DropdownButtonFormField<String>(isExpanded: true, value: b, hint: const Text('Select'), items: bowlers.map((n) => DropdownMenuItem(value: n, child: Text(n))).toList(), onChanged: (v) => setD(() => b = v)),
-      ])),
-      actions: [TextButton(onPressed: () { setState(() { for (final p in _inn.batsmen) p.isBatting = (p.name == s || p.name == ns); for (final p in _inn.bowlers) p.isBowling = (p.name == b); }); Navigator.pop(ctx); }, child: const Text('Start'))],
-    )));
+    showDialog(context: context, barrierDismissible: false, builder: (ctx) => StatefulBuilder(builder: (c, setD) {
+      final canStart = s != null && ns != null && b != null && s != ns;
+      return AlertDialog(
+        title: const Text('Select Openers & Bowler'),
+        content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Text('Striker', style: TextStyle(fontSize: 12, color: C.grey)), const SizedBox(height: 4),
+          DropdownButtonFormField<String>(isExpanded: true, value: s, hint: const Text('Select'), items: batters.map((n) => DropdownMenuItem(value: n, child: Text(n))).toList(), onChanged: (v) => setD(() => s = v)),
+          const SizedBox(height: 10),
+          Text('Non-Striker', style: TextStyle(fontSize: 12, color: C.grey)), const SizedBox(height: 4),
+          DropdownButtonFormField<String>(isExpanded: true, value: ns, hint: const Text('Select'), items: batters.map((n) => DropdownMenuItem(value: n, child: Text(n))).toList(), onChanged: (v) => setD(() => ns = v)),
+          const SizedBox(height: 10),
+          Text('Opening Bowler', style: TextStyle(fontSize: 12, color: C.grey)), const SizedBox(height: 4),
+          DropdownButtonFormField<String>(isExpanded: true, value: b, hint: const Text('Select'), items: bowlerNames.map((n) => DropdownMenuItem(value: n, child: Text(n))).toList(), onChanged: (v) => setD(() => b = v)),
+          if (s != null && ns != null && s == ns)
+            const Padding(padding: EdgeInsets.only(top: 8), child: Text('Striker and Non-Striker must be different', style: TextStyle(color: Colors.red, fontSize: 12))),
+        ])),
+        actions: [
+          TextButton(
+            onPressed: canStart ? () {
+              setState(() {
+                for (final p in _inn.batsmen) p.isBatting = (p.name == s || p.name == ns);
+                for (final p in _inn.bowlers) p.isBowling = (p.name == b);
+              });
+              Navigator.pop(ctx);
+            } : null,
+            child: const Text('Start'),
+          ),
+        ],
+      );
+    }));
   }
 }

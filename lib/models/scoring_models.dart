@@ -148,12 +148,14 @@ class InningsState {
     required this.inningsNo,
     required this.battingTeam,
     required this.bowlingTeam,
-    this.batsmen = const [],
-    this.bowlers = const [],
-    this.balls = const [],
+    List<PlayerInMatch>? batsmen,
+    List<PlayerInMatch>? bowlers,
+    List<Ball>? balls,
     this.targetRuns = 0,
     this.targetOvers = 0,
-  });
+  })  : batsmen = batsmen ?? [],
+        bowlers = bowlers ?? [],
+        balls = balls ?? [];
 
   int get totalRuns => balls.fold(0, (sum, b) => sum + b.totalRuns);
   int get totalWickets => balls.where((b) => b.isWicket).length;

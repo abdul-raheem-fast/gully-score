@@ -125,15 +125,23 @@ class _NewMatchScreenState extends State<NewMatchScreen> {
     );
 
   Widget stepSquad(String team, List<TextEditingController> squad) => StatefulBuilder(builder: (ctx, setSt) {
+    // Helper that rebuilds both the inner StatefulBuilder AND the outer widget
+    // so that _ok (which reads squad.length and controller text) is always current.
+    void refresh(VoidCallback fn) { setSt(fn); setState(() {}); }
     return SingleChildScrollView(padding: const EdgeInsets.all(20), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       _title('${team.isEmpty ? "Team" : team} Squad'), const SizedBox(height: 4),
       const Text('Add at least 2 players', style: TextStyle(fontSize: 12, color: C.grey)), const SizedBox(height: 16),
       ...List.generate(squad.length, (i) => Padding(padding: const EdgeInsets.only(bottom: 10), child: Row(children: [
-        Expanded(child: _field('Player ${i+1}', squad[i], icon: Icons.person_outline)),
-        if (squad.length > 1) IconButton(onPressed: () { squad[i].dispose(); setSt(() => squad.removeAt(i)); }, icon: const Icon(Icons.remove_circle_outline, color: Colors.red)),
+        Expanded(child: TextField(
+          controller: squad[i],
+          onChanged: (_) => refresh(() {}),
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: C.dark),
+          decoration: InputDecoration(labelText: 'Player ${i+1}', prefixIcon: const Icon(Icons.person_outline, color: C.g2, size: 20), filled: true, fillColor: C.gLight, border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none), contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18)),
+        )),
+        if (squad.length > 1) IconButton(onPressed: () { squad[i].dispose(); refresh(() => squad.removeAt(i)); }, icon: const Icon(Icons.remove_circle_outline, color: Colors.red)),
       ]))),
       const SizedBox(height: 8),
-      OutlinedButton.icon(onPressed: () => setSt(() => squad.add(TextEditingController())), icon: const Icon(Icons.add, color: C.g2), label: const Text('Add Player', style: TextStyle(color: C.g2, fontWeight: FontWeight.w700)),
+      OutlinedButton.icon(onPressed: () => refresh(() => squad.add(TextEditingController())), icon: const Icon(Icons.add, color: C.g2), label: const Text('Add Player', style: TextStyle(color: C.g2, fontWeight: FontWeight.w700)),
         style: OutlinedButton.styleFrom(side: const BorderSide(color: C.g2), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12)),
       ),
       const SizedBox(height: 28), _navButtons(),
