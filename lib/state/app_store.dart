@@ -50,96 +50,9 @@ class AppStoreState extends State<AppStore> {
 
   final List<AuthUser> _users = [];
 
-  // In-memory sample data used by admin screens.
-  static final List<AdminMatch> _seedMatches = [
-    AdminMatch(
-      id: 'm1',
-      teamA: 'Alpha Blasters',
-      teamB: 'Cricket Kings',
-      scoreA: '125/6',
-      scoreB: '110/8',
-      venue: 'Model Town Ground',
-      date: DateTime(2026, 3, 12, 19, 0),
-      status: MatchStatus.live,
-    ),
-    AdminMatch(
-      id: 'm2',
-      teamA: 'City Champs',
-      teamB: 'Valley Victors',
-      scoreA: '0/0',
-      scoreB: '0/0',
-      venue: 'Greenfield Stadium',
-      date: DateTime(2026, 3, 20, 16, 0),
-      status: MatchStatus.upcoming,
-    ),
-    AdminMatch(
-      id: 'm3',
-      teamA: 'Rapid Rangers',
-      teamB: 'Mighty Sixers',
-      scoreA: '180/4',
-      scoreB: '178/5',
-      venue: 'Hilltop Arena',
-      date: DateTime(2026, 2, 28, 18, 30),
-      status: MatchStatus.completed,
-    ),
-    AdminMatch(
-      id: 'm4',
-      teamA: 'Storm Strikers',
-      teamB: 'Emerald Eagles',
-      scoreA: '0/0',
-      scoreB: '0/0',
-      venue: 'Riverfront Oval',
-      date: DateTime(2026, 3, 26, 17, 0),
-      status: MatchStatus.upcoming,
-    ),
-  ];
+  final List<AdminMatch> _matches = [];
 
-  final List<AdminMatch> _matches = List<AdminMatch>.from(_seedMatches);
-
-  static const List<AdminTeam> _seedTeams = [
-    const AdminTeam(
-      id: 't1',
-      name: 'Alpha Blasters',
-      abbreviation: 'AB',
-      captain: 'Ahmed Raza',
-      playerCount: 11,
-      matchCount: 23,
-    ),
-    const AdminTeam(
-      id: 't2',
-      name: 'City Champs',
-      abbreviation: 'CC',
-      captain: 'Sara Khan',
-      playerCount: 12,
-      matchCount: 19,
-    ),
-    const AdminTeam(
-      id: 't3',
-      name: 'River Riders',
-      abbreviation: 'RR',
-      captain: 'Bilal Ahmed',
-      playerCount: 10,
-      matchCount: 15,
-    ),
-    const AdminTeam(
-      id: 't4',
-      name: 'Storm Strikers',
-      abbreviation: 'SS',
-      captain: 'Zain Malik',
-      playerCount: 14,
-      matchCount: 21,
-    ),
-    const AdminTeam(
-      id: 't5',
-      name: 'Mighty Sixers',
-      abbreviation: 'MS',
-      captain: 'Hira Ali',
-      playerCount: 13,
-      matchCount: 18,
-    ),
-  ];
-
-  final List<AdminTeam> _teams = List<AdminTeam>.from(_seedTeams);
+  final List<AdminTeam> _teams = [];
 
   List<AdminMatch> get matches => List.unmodifiable(_matches);
   List<AdminTeam> get teams => List.unmodifiable(_teams);
@@ -193,12 +106,12 @@ class AppStoreState extends State<AppStore> {
       setState(() {
         _matches
           ..clear()
-          ..addAll(remoteMatches.isEmpty ? _seedMatches : remoteMatches);
+          ..addAll(remoteMatches);
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        matchesLoadError = 'Using local data while backend is unavailable.';
+        matchesLoadError = 'Could not load matches from server.';
       });
     } finally {
       if (!mounted) return;
@@ -219,12 +132,12 @@ class AppStoreState extends State<AppStore> {
       setState(() {
         _teams
           ..clear()
-          ..addAll(remoteTeams.isEmpty ? _seedTeams : remoteTeams);
+          ..addAll(remoteTeams);
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        teamsLoadError = 'Using local teams while backend is unavailable.';
+        teamsLoadError = 'Could not load teams from server.';
       });
     } finally {
       if (!mounted) return;
@@ -479,7 +392,7 @@ class AppStoreState extends State<AppStore> {
     }
   }
 
-  /// Convert a scoring session to AdminMatch and add to local list.
+  /// Convert a scoring session to AdminMatch and persist to both local state and DB.
   void saveScoringSession(ScoringSession session) {
     final innings1 = session.innings1;
     final innings2 = session.innings2;
@@ -494,6 +407,8 @@ class AppStoreState extends State<AppStore> {
       venue: session.setup.venue,
       date: session.setup.date,
       status: session.isCompleted ? MatchStatus.completed : MatchStatus.live,
+      result: session.result,
+      winner: _deriveWinner(session),
     );
     setState(() {
       final idx = _matches.indexWhere((m) => m.id == match.id);
@@ -503,6 +418,17 @@ class AppStoreState extends State<AppStore> {
         _matches.insert(0, match);
       }
     });
+    // Persist to backend (fire-and-forget).
+    SupabaseService.updateAdminMatch(match).catchError((_) {});
+  }
+
+  String? _deriveWinner(ScoringSession session) {
+    if (!session.isCompleted) return null;
+    final r1 = session.innings1?.totalRuns ?? 0;
+    final r2 = session.innings2?.totalRuns ?? 0;
+    if (r1 > r2) return session.setup.battingFirst;
+    if (r2 > r1) return session.setup.bowlingFirst;
+    return ''; // tie
   }
 
   @override

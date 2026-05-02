@@ -124,6 +124,10 @@ class SupabaseService {
       'team_b_name': match.teamB,
       'venue': match.venue,
       'status': _toDbStatus(match.status),
+      'score_a': match.scoreA,
+      'score_b': match.scoreB,
+      'result': match.result,
+      'winner': match.winner,
     }).eq('id', match.id);
   }
 
@@ -498,17 +502,23 @@ class SupabaseService {
     final parsedDate = DateTime.tryParse(matchDateRaw ?? '') ??
         DateTime.tryParse(createdAtRaw ?? '') ??
         DateTime.now();
+    final scoreA = (row['score_a'] as String?) ?? '0/0';
+    final scoreB = (row['score_b'] as String?) ?? '0/0';
+    final result = row['result'] as String?;
+    final winner = row['winner'] as String?;
 
     return AdminMatch(
       id: row['id']?.toString() ?? '${teamA}_$teamB',
       teamA: teamA,
       teamB: teamB,
-      scoreA: '0/0',
-      scoreB: '0/0',
+      scoreA: scoreA,
+      scoreB: scoreB,
       venue: venue,
       date: parsedDate,
       status: _fromDbStatus((row['status'] as String?) ?? 'upcoming'),
       flagged: false,
+      result: result,
+      winner: winner,
     );
   }
 

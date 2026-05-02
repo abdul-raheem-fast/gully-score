@@ -10,6 +10,10 @@ class AdminMatch {
   final DateTime date;
   final MatchStatus status;
   final bool flagged;
+  /// Human-readable result string, e.g. "Alpha won by 23 runs".
+  final String? result;
+  /// Name of the winning team (empty string = tie/not decided).
+  final String? winner;
 
   const AdminMatch({
     required this.id,
@@ -21,6 +25,8 @@ class AdminMatch {
     required this.date,
     required this.status,
     this.flagged = false,
+    this.result,
+    this.winner,
   });
 
   AdminMatch copyWith({
@@ -33,6 +39,8 @@ class AdminMatch {
     DateTime? date,
     MatchStatus? status,
     bool? flagged,
+    String? result,
+    String? winner,
   }) {
     return AdminMatch(
       id: id ?? this.id,
@@ -44,6 +52,8 @@ class AdminMatch {
       date: date ?? this.date,
       status: status ?? this.status,
       flagged: flagged ?? this.flagged,
+      result: result ?? this.result,
+      winner: winner ?? this.winner,
     );
   }
 }
