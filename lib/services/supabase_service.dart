@@ -203,26 +203,44 @@ class SupabaseService {
 
   static Future<void> updateAdminMatch(AdminMatch match) async {
     await client.from('matches').update({
+      'title': '${match.teamA} vs ${match.teamB}',
       'team_a_name': match.teamA,
       'team_b_name': match.teamB,
       'venue': match.venue,
+      'match_date': _toDateString(match.date),
       'status': _toDbStatus(match.status),
-      'score_a': match.scoreA,
-      'score_b': match.scoreB,
-      'result': match.result,
-      'winner': match.winner,
-      if (match.overs != null) 'overs': match.overs,
+      if (match.overs != null) 'overs_per_innings': match.overs,
     }).eq('id', match.id);
+  }
+
+  /// Upsert a match row so save works for both brand-new and existing matches.
+  static Future<void> upsertAdminMatch(AdminMatch match) async {
+    await client.from('matches').upsert({
+      'id': match.id,
+      'title': '${match.teamA} vs ${match.teamB}',
+      'team_a_name': match.teamA,
+      'team_b_name': match.teamB,
+      'venue': match.venue,
+      'match_date': _toDateString(match.date),
+      'status': _toDbStatus(match.status),
+      if (match.overs != null) 'overs_per_innings': match.overs,
+      // Helps list ordering when this is the first write for the id.
+      'created_at': DateTime.now().toIso8601String(),
+    }, onConflict: 'id');
   }
 
   static Future<void> createMatch(MatchSetup setup) async {
     // Use insertion time for created_at so lists ordered by created_at show new matches first.
     await client.from('matches').insert({
       'id': setup.id,
+      'title': '${setup.teamA} vs ${setup.teamB}',
       'team_a_name': setup.teamA,
       'team_b_name': setup.teamB,
       'venue': setup.venue,
-      'overs': setup.overs,
+      'match_date': _toDateString(setup.date),
+      'overs_per_innings': setup.overs,
+      'toss_winner': setup.tossWinner,
+      'toss_decision': setup.electedTo,
       'status': 'live',
       'created_at': DateTime.now().toIso8601String(),
     });
@@ -760,10 +778,8 @@ class SupabaseService {
     final parsedDate = DateTime.tryParse(matchDateRaw ?? '') ??
         DateTime.tryParse(createdAtRaw ?? '') ??
         DateTime.now();
-    final scoreA = (row['score_a'] as String?) ?? '0/0';
-    final scoreB = (row['score_b'] as String?) ?? '0/0';
-    final result = row['result'] as String?;
-    final winner = row['winner'] as String?;
+    final scoreA = '0/0';
+    final scoreB = '0/0';
 
     return AdminMatch(
       id: row['id']?.toString() ?? '${teamA}_$teamB',
@@ -775,11 +791,13 @@ class SupabaseService {
       date: parsedDate,
       status: _fromDbStatus((row['status'] as String?) ?? 'upcoming'),
       flagged: false,
-      result: result,
-      winner: winner,
-      overs: (row['overs'] as num?)?.toInt(),
+      result: null,
+      winner: null,
+      overs: (row['overs_per_innings'] as num?)?.toInt(),
     );
   }
+
+  static String _toDateString(DateTime dt) => dt.toIso8601String().split('T').first;
 
   static Ball ballFromRow(Map<String, dynamic> row, int id) {
     return Ball(

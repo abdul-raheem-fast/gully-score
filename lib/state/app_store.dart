@@ -434,8 +434,13 @@ class AppStoreState extends State<AppStore> {
         _matches.insert(0, match);
       }
     });
-    // Persist to backend (fire-and-forget).
-    SupabaseService.updateAdminMatch(match).catchError((_) {});
+    // Persist to backend (fire-and-forget) via upsert so new matches are created too.
+    SupabaseService.upsertAdminMatch(match).catchError((e) {
+      if (!mounted) return;
+      setState(() {
+        matchesLoadError = 'Could not save match to Supabase: $e';
+      });
+    });
   }
 
   String? _deriveWinner(ScoringSession session) {
