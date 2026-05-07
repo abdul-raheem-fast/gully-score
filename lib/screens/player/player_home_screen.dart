@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/admin_models.dart';
 import '../../models/player_models.dart';
+import '../../models/scoring_models.dart';
 import '../../state/app_store.dart';
 import '../../theme/app_theme.dart';
 import '../../route_paths.dart';
@@ -237,7 +238,8 @@ class _DashboardTabState extends State<_DashboardTab>
     final store = AppStore.of(context);
     final name = store.userName.isEmpty ? 'Player' : store.userName;
     final initials = name.trim().split(' ').map((w) => w[0]).take(2).join().toUpperCase();
-    final live = _deriveLiveMatch(store);
+    final liveSession = store.activeLiveSession;
+    final live = _deriveLiveMatch(store, activeSession: liveSession);
     final recent = _deriveRecentMatches(store);
 
     return FadeTransition(
@@ -322,7 +324,16 @@ class _DashboardTabState extends State<_DashboardTab>
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 22, 20, 0),
-                child: _LiveMatchCard(match: live),
+                child: _LiveMatchCard(
+                  match: live,
+                  onTap: liveSession == null
+                      ? null
+                      : () => Navigator.pushNamed(
+                            context,
+                            RoutePaths.liveScoring,
+                            arguments: liveSession,
+                          ),
+                ),
               ),
             ),
 
@@ -413,24 +424,22 @@ class _DashboardTabState extends State<_DashboardTab>
     );
   }
 
-  LiveMatch _deriveLiveMatch(AppStoreState store) {
-    final liveMatch = store.matches
-        .where((m) => m.status == MatchStatus.live)
-        .cast<AdminMatch>()
-        .toList();
-    if (liveMatch.isNotEmpty) {
-      final m = liveMatch.first;
+  LiveMatch _deriveLiveMatch(AppStoreState store, {ScoringSession? activeSession}) {
+    if (activeSession != null && !activeSession.isCompleted) {
+      final s = activeSession;
+      final inn1 = s.innings1;
+      final inn2 = s.innings2;
       return LiveMatch(
-        teamA: m.teamA,
-        teamAbbr: _abbr(m.teamA),
-        teamB: m.teamB,
-        teamBAbbr: _abbr(m.teamB),
-        scoreA: m.scoreA,
-        scoreB: m.scoreB,
+        teamA: s.setup.teamA,
+        teamAbbr: _abbr(s.setup.teamA),
+        teamB: s.setup.teamB,
+        teamBAbbr: _abbr(s.setup.teamB),
+        scoreA: '${inn1?.totalRuns ?? 0}/${inn1?.totalWickets ?? 0}',
+        scoreB: '${inn2?.totalRuns ?? 0}/${inn2?.totalWickets ?? 0}',
         oversA: 'Live',
         oversB: 'Live',
-        targetOvers: 'TBD',
-        chaseInfo: '${m.teamA} vs ${m.teamB} in progress',
+        targetOvers: '${s.setup.overs} ov',
+        chaseInfo: '${s.setup.teamA} vs ${s.setup.teamB} in progress',
       );
     }
     return const LiveMatch(
@@ -505,7 +514,8 @@ class _DashboardTabState extends State<_DashboardTab>
 // ─────────────────────────────────────────────────────────────
 class _LiveMatchCard extends StatefulWidget {
   final LiveMatch match;
-  const _LiveMatchCard({required this.match});
+  final VoidCallback? onTap;
+  const _LiveMatchCard({required this.match, this.onTap});
 
   @override
   State<_LiveMatchCard> createState() => _LiveMatchCardState();
@@ -533,7 +543,10 @@ class _LiveMatchCardState extends State<_LiveMatchCard>
   @override
   Widget build(BuildContext context) {
     final m = widget.match;
-    return Container(
+    final canResume = widget.onTap != null;
+    return GestureDetector(
+      onTap: widget.onTap,
+      child: Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
@@ -701,9 +714,20 @@ class _LiveMatchCardState extends State<_LiveMatchCard>
                   fontWeight: FontWeight.w500),
             ),
           ),
+          if (canResume) ...[
+            const SizedBox(height: 10),
+            const Text(
+              'Tap to resume live scoring',
+              style: TextStyle(
+                color: Colors.white70,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
         ],
       ),
-    );
+    ));
   }
 }
 
@@ -893,42 +917,41 @@ class _MatchCard extends StatelessWidget {
           const SizedBox(height: 12),
 
           // Teams row
-          Row(
-            children: [
-              // My team
-              _TeamChip(abbr: match.myTeamAbbr, name: ''),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 10),
-                child: Text('vs',
-                    style: TextStyle(
-                        color: C.hint,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w500)),
-              ),
-              // Scores
-              Expanded(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                  Text('${match.myTeam} vs ${match.opponent}',
-                      style: const TextStyle(
-                          fontSize: 12.5,
-                          fontWeight: FontWeight.w700,
-                          color: C.dark)),
-                  const SizedBox(height: 2),
-                  Text(match.myTeamScore,
-                      style: const TextStyle(
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w700,
-                          color: C.dark)),
-                  const SizedBox(height: 2),
-                  Text(match.opponentScore,
-                      style:
-                          const TextStyle(fontSize: 12, color: C.grey)),
-                ]),
-              ),
-              _TeamChip(abbr: match.opponentAbbr, name: ''),
-            ],
+          Center(
+            child: Column(
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _TeamChip(abbr: match.myTeamAbbr, name: ''),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 10),
+                      child: Text('vs',
+                          style: TextStyle(
+                              color: C.hint,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500)),
+                    ),
+                    _TeamChip(abbr: match.opponentAbbr, name: ''),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text('${match.myTeam} vs ${match.opponent}',
+                    style: const TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w700,
+                        color: C.dark)),
+                const SizedBox(height: 2),
+                Text(match.myTeamScore,
+                    style: const TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w700,
+                        color: C.dark)),
+                const SizedBox(height: 2),
+                Text(match.opponentScore,
+                    style: const TextStyle(fontSize: 12, color: C.grey)),
+              ],
+            ),
           ),
 
           const SizedBox(height: 10),
@@ -962,6 +985,7 @@ class _TeamChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final showName = name.trim().isNotEmpty;
     return Row(mainAxisSize: MainAxisSize.min, children: [
       Container(
         width: 36,
@@ -979,12 +1003,14 @@ class _TeamChip extends StatelessWidget {
                   fontWeight: FontWeight.w800)),
         ),
       ),
-      const SizedBox(width: 6),
-      Text(name,
-          style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: C.dark)),
+      if (showName) ...[
+        const SizedBox(width: 6),
+        Text(name,
+            style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: C.dark)),
+      ],
     ]);
   }
 }

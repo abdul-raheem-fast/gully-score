@@ -28,10 +28,22 @@ class _LiveScoringScreenState extends State<LiveScoringScreen> {
     if (!mounted) return;
     final store = AppStore.of(context);
     store.saveScoringSession(_s);
+    store.clearActiveLiveSession();
     await store.refreshMatches();
     if (!mounted) return;
     // Clear stacked routes (e.g. New match, Live scoring) and land on player home.
     // popUntil(isFirst) wrongly stops at RoleSelect under Home when that was never replaced.
+    Navigator.of(context).pushNamedAndRemoveUntil(
+      RoutePaths.home,
+      (route) => false,
+    );
+  }
+
+  void _pauseAndGoHome() {
+    if (!mounted) return;
+    final store = AppStore.of(context);
+    store.setActiveLiveSession(_s);
+    store.saveScoringSession(_s);
     Navigator.of(context).pushNamedAndRemoveUntil(
       RoutePaths.home,
       (route) => false,
@@ -49,6 +61,13 @@ class _LiveScoringScreenState extends State<LiveScoringScreen> {
         backgroundColor: C.g1,
         foregroundColor: C.white,
         title: const Text('Live Scoring', style: TextStyle(fontWeight: FontWeight.w800)),
+        actions: [
+          IconButton(
+            tooltip: 'Pause and go home',
+            onPressed: _pauseAndGoHome,
+            icon: const Icon(Icons.home_rounded),
+          ),
+        ],
       ),
       body: SafeArea(child: SingleChildScrollView(
         padding: const EdgeInsets.all(16),

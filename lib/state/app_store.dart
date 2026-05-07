@@ -51,10 +51,12 @@ class AppStoreState extends State<AppStore> {
   final List<AuthUser> _users = [];
 
   final List<AdminMatch> _matches = [];
+  ScoringSession? _activeLiveSession;
 
   final List<AdminTeam> _teams = [];
 
   List<AdminMatch> get matches => List.unmodifiable(_matches);
+  ScoringSession? get activeLiveSession => _activeLiveSession?.copy();
   List<AdminTeam> get teams => List.unmodifiable(_teams);
   List<AuthUser> get users => List.unmodifiable(_users);
 
@@ -427,6 +429,7 @@ class AppStoreState extends State<AppStore> {
       overs: session.setup.overs,
     );
     setState(() {
+      _activeLiveSession = session.isCompleted ? null : session.copy();
       final idx = _matches.indexWhere((m) => m.id == match.id);
       if (idx >= 0) {
         _matches[idx] = match;
@@ -440,6 +443,18 @@ class AppStoreState extends State<AppStore> {
       setState(() {
         matchesLoadError = 'Could not save match to Supabase: $e';
       });
+    });
+  }
+
+  void setActiveLiveSession(ScoringSession session) {
+    setState(() {
+      _activeLiveSession = session.copy();
+    });
+  }
+
+  void clearActiveLiveSession() {
+    setState(() {
+      _activeLiveSession = null;
     });
   }
 
