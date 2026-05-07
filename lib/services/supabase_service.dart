@@ -134,7 +134,53 @@ class SupabaseService {
         .order('created_at', ascending: false);
 
     final rows = List<Map<String, dynamic>>.from(response);
-    return rows.map(_rowToAdminMatch).toList();
+    final matches = rows.map(_rowToAdminMatch).toList();
+    if (matches.isEmpty) return matches;
+
+    final matchIds =
+        matches.map((m) => m.id).where((id) => _isUuidString(id)).toList();
+    if (matchIds.isEmpty) return matches;
+
+    final inningsResp = await client
+        .from('innings')
+        .select('id,match_id,innings_no,batting_team,total_runs,wickets')
+        .inFilter('match_id', matchIds)
+        .order('innings_no', ascending: true);
+    final inningsRows = List<Map<String, dynamic>>.from(inningsResp);
+    final byMatch = <String, List<Map<String, dynamic>>>{};
+    for (final row in inningsRows) {
+      final id = row['match_id']?.toString();
+      if (id == null || id.isEmpty) continue;
+      byMatch.putIfAbsent(id, () => <Map<String, dynamic>>[]).add(row);
+    }
+
+    final inningsIds = inningsRows
+        .map((r) => r['id']?.toString() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toList();
+    final ballEventsByInningsId = <String, List<Map<String, dynamic>>>{};
+    if (inningsIds.isNotEmpty) {
+      final ballEventsResp = await client
+          .from('ball_events')
+          .select('innings_id,runs_off_bat,extra_runs,wicket_type')
+          .inFilter('innings_id', inningsIds);
+      for (final row in List<Map<String, dynamic>>.from(ballEventsResp)) {
+        final innId = row['innings_id']?.toString() ?? '';
+        if (innId.isEmpty) continue;
+        ballEventsByInningsId
+            .putIfAbsent(innId, () => <Map<String, dynamic>>[])
+            .add(row);
+      }
+    }
+
+    return matches.map((m) {
+      final innings = byMatch[m.id] ?? const [];
+      return _mergeInningsIntoMatch(
+        m,
+        innings,
+        ballEventsByInningsId: ballEventsByInningsId,
+      );
+    }).toList();
   }
 
   static Future<AdminMatch?> fetchMatchById(String matchId) async {
@@ -146,7 +192,16 @@ class SupabaseService {
         final response =
             await client.from('matches').select().eq('id', id).limit(1);
         final rows = List<Map<String, dynamic>>.from(response);
-        if (rows.isNotEmpty) return _rowToAdminMatch(rows.first);
+        if (rows.isNotEmpty) {
+          final base = _rowToAdminMatch(rows.first);
+          final innings = await fetchInnings(id);
+          final balls = await fetchBallsByMatch(id);
+          return _mergeInningsIntoMatch(
+            base,
+            innings,
+            ballsByInningsNo: _ballsByInningsNo(balls),
+          );
+        }
       } catch (_) {}
     }
     try {
@@ -191,14 +246,37 @@ class SupabaseService {
   ) async {
     final mid = matchId.trim();
     if (!_isUuidString(mid)) return [];
-    final response = await client
-        .from('balls')
-        .select()
+    final inningsResp = await client
+        .from('innings')
+        .select('id,innings_no')
         .eq('match_id', mid)
-        .order('innings_no', ascending: true)
-        .order('over_no', ascending: true)
-        .order('ball_no', ascending: true);
-    return List<Map<String, dynamic>>.from(response);
+        .order('innings_no', ascending: true);
+    final inningsRows = List<Map<String, dynamic>>.from(inningsResp);
+    if (inningsRows.isEmpty) return [];
+
+    final out = <Map<String, dynamic>>[];
+    for (final inn in inningsRows) {
+      final inningsId = inn['id']?.toString();
+      final inningsNo = (inn['innings_no'] as num?)?.toInt() ?? 1;
+      if (inningsId == null || inningsId.isEmpty) continue;
+      final eventsResp = await client
+          .from('ball_events')
+          .select()
+          .eq('innings_id', inningsId)
+          .order('over_no', ascending: true)
+          .order('ball_no', ascending: true)
+          .order('created_at', ascending: true);
+      final events = List<Map<String, dynamic>>.from(eventsResp);
+      for (final row in events) {
+        out.add({
+          ...row,
+          'innings_no': inningsNo,
+          'is_wicket':
+              ((row['wicket_type'] as String?)?.trim().isNotEmpty ?? false),
+        });
+      }
+    }
+    return out;
   }
 
   static Future<void> updateAdminMatch(AdminMatch match) async {
@@ -230,8 +308,8 @@ class SupabaseService {
   }
 
   static Future<void> createMatch(MatchSetup setup) async {
-    // Use insertion time for created_at so lists ordered by created_at show new matches first.
-    await client.from('matches').insert({
+    // Upsert so repeated writes for the same match id do not fail with 409 conflict.
+    await client.from('matches').upsert({
       'id': setup.id,
       'title': '${setup.teamA} vs ${setup.teamB}',
       'team_a_name': setup.teamA,
@@ -240,10 +318,10 @@ class SupabaseService {
       'match_date': _toDateString(setup.date),
       'overs_per_innings': setup.overs,
       'toss_winner': setup.tossWinner,
-      'toss_decision': setup.electedTo,
+      'toss_decision': setup.electedTo == 'field' ? 'bowl' : setup.electedTo,
       'status': 'live',
       'created_at': DateTime.now().toIso8601String(),
-    });
+    }, onConflict: 'id');
   }
 
   static Future<void> createInnings(InningsState innings, String matchId) async {
@@ -252,25 +330,51 @@ class SupabaseService {
       'innings_no': innings.inningsNo,
       'batting_team': innings.battingTeam,
       'bowling_team': innings.bowlingTeam,
-      'target_runs': innings.targetRuns,
-      'target_overs': innings.targetOvers,
+      'total_runs': innings.totalRuns,
+      'wickets': innings.totalWickets,
+      'balls_bowled': innings.legalBalls,
+      'extras': innings.balls.fold(0, (sum, b) => sum + b.extraRuns),
+      'is_completed': false,
     });
   }
 
   static Future<void> createBall(Ball ball, String matchId, int inningsNo) async {
-    await client.from('balls').insert({
-      'match_id': matchId,
-      'innings_no': inningsNo,
+    var inningsId = await _findInningsId(matchId, inningsNo);
+    if (inningsId == null) {
+      // The innings row can lag briefly right after match start.
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      inningsId = await _findInningsId(matchId, inningsNo);
+    }
+    if (inningsId == null) return;
+    await client.from('ball_events').insert({
+      'innings_id': inningsId,
       'over_no': ball.overNo,
       'ball_no': ball.ballNo,
       'runs_off_bat': ball.runsOffBat,
       'extra_runs': ball.extraRuns,
       'extra_type': ball.extraType,
-      'is_wicket': ball.isWicket,
       'wicket_type': ball.wicketType,
       'wicket_player_name': ball.wicketPlayerName,
       'commentary': ball.commentary,
     });
+  }
+
+  static Future<void> updateInningsSummary(
+    InningsState innings,
+    String matchId, {
+    bool? isCompleted,
+  }) async {
+    await client
+        .from('innings')
+        .update({
+          'total_runs': innings.totalRuns,
+          'wickets': innings.totalWickets,
+          'balls_bowled': innings.legalBalls,
+          'extras': innings.balls.fold(0, (sum, b) => sum + b.extraRuns),
+          if (isCompleted != null) 'is_completed': isCompleted,
+        })
+        .eq('match_id', matchId)
+        .eq('innings_no', innings.inningsNo);
   }
 
   static Future<List<AdminTeam>> fetchAdminTeams() async {
@@ -728,6 +832,20 @@ class SupabaseService {
     return List<Map<String, dynamic>>.from(response);
   }
 
+  static Future<String?> _findInningsId(String matchId, int inningsNo) async {
+    final response = await client
+        .from('innings')
+        .select('id')
+        .eq('match_id', matchId)
+        .eq('innings_no', inningsNo)
+        .limit(1);
+    final rows = List<Map<String, dynamic>>.from(response);
+    if (rows.isEmpty) return null;
+    final id = rows.first['id']?.toString();
+    if (id == null || id.isEmpty) return null;
+    return id;
+  }
+
   static Future<void> addBallEvent({
     required String inningsId,
     required int overNo,
@@ -798,6 +916,106 @@ class SupabaseService {
   }
 
   static String _toDateString(DateTime dt) => dt.toIso8601String().split('T').first;
+
+  static Map<int, List<Map<String, dynamic>>> _ballsByInningsNo(
+    List<Map<String, dynamic>> balls,
+  ) {
+    final out = <int, List<Map<String, dynamic>>>{};
+    for (final b in balls) {
+      final no = (b['innings_no'] as num?)?.toInt() ?? 0;
+      if (no <= 0) continue;
+      out.putIfAbsent(no, () => <Map<String, dynamic>>[]).add(b);
+    }
+    return out;
+  }
+
+  static AdminMatch _mergeInningsIntoMatch(
+    AdminMatch match,
+    List<Map<String, dynamic>> inningsRows, {
+    Map<String, List<Map<String, dynamic>>> ballEventsByInningsId = const {},
+    Map<int, List<Map<String, dynamic>>> ballsByInningsNo = const {},
+  }) {
+    String scoreA = match.scoreA;
+    String scoreB = match.scoreB;
+
+    int? runsA;
+    int? runsB;
+    int? wktsA;
+    int? wktsB;
+
+    for (final row in inningsRows) {
+      final batting = (row['batting_team'] as String?)?.trim() ?? '';
+      final inningsNo = (row['innings_no'] as num?)?.toInt() ?? 0;
+      var runs = (row['total_runs'] as num?)?.toInt() ?? 0;
+      var wkts = (row['wickets'] as num?)?.toInt() ?? 0;
+      final inningsId = row['id']?.toString() ?? '';
+
+      final events =
+          inningsId.isNotEmpty ? (ballEventsByInningsId[inningsId] ?? const []) : const <Map<String, dynamic>>[];
+      final balls = ballsByInningsNo[inningsNo] ?? const <Map<String, dynamic>>[];
+      if ((runs == 0 && wkts == 0) && (events.isNotEmpty || balls.isNotEmpty)) {
+        if (events.isNotEmpty) {
+          runs = events.fold<int>(
+            0,
+            (sum, e) =>
+                sum +
+                ((e['runs_off_bat'] as num?)?.toInt() ?? 0) +
+                ((e['extra_runs'] as num?)?.toInt() ?? 0),
+          );
+          wkts = events
+              .where((e) => ((e['wicket_type'] as String?)?.trim().isNotEmpty ?? false))
+              .length;
+        } else {
+          runs = balls.fold<int>(
+            0,
+            (sum, b) =>
+                sum +
+                ((b['runs_off_bat'] as num?)?.toInt() ?? 0) +
+                ((b['extra_runs'] as num?)?.toInt() ?? 0),
+          );
+          wkts = balls
+              .where((b) => ((b['wicket_type'] as String?)?.trim().isNotEmpty ?? false))
+              .length;
+        }
+      }
+
+      final battingNorm = batting.toLowerCase();
+      final teamANorm = match.teamA.trim().toLowerCase();
+      final teamBNorm = match.teamB.trim().toLowerCase();
+      if (battingNorm == teamANorm || (battingNorm.isEmpty && inningsNo == 1)) {
+        runsA = runs;
+        wktsA = wkts;
+      } else if (battingNorm == teamBNorm || (battingNorm.isEmpty && inningsNo == 2)) {
+        runsB = runs;
+        wktsB = wkts;
+      }
+    }
+
+    if (runsA != null) scoreA = '$runsA/${wktsA ?? 0}';
+    if (runsB != null) scoreB = '$runsB/${wktsB ?? 0}';
+
+    String? winner = match.winner;
+    String? result = match.result;
+    if (runsA != null && runsB != null) {
+      if (runsA > runsB) {
+        winner = match.teamA;
+        result = '${match.teamA} won by ${runsA - runsB} runs';
+      } else if (runsB > runsA) {
+        winner = match.teamB;
+        result = '${match.teamB} won by ${runsB - runsA} runs';
+      } else {
+        winner = '';
+        result = 'Match Tied';
+      }
+    }
+
+    return match.copyWith(
+      scoreA: scoreA,
+      scoreB: scoreB,
+      winner: winner,
+      result: result,
+    );
+  }
 
   static Ball ballFromRow(Map<String, dynamic> row, int id) {
     return Ball(

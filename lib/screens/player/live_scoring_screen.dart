@@ -251,6 +251,9 @@ class _LiveScoringScreenState extends State<LiveScoringScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) AppStore.of(context).saveScoringSession(_s);
       SupabaseService.createBall(ball, _s.setup.id, _s.currentInningsNo).catchError((_) {});
+      SupabaseService
+          .updateInningsSummary(_inn, _s.setup.id)
+          .catchError((_) {});
     });
   }
 
@@ -319,6 +322,9 @@ class _LiveScoringScreenState extends State<LiveScoringScreen> {
 
   void _endInnings() {
     if (_s.currentInningsNo == 1) {
+      SupabaseService
+          .updateInningsSummary(_inn, _s.setup.id, isCompleted: true)
+          .catchError((_) {});
       final target = _inn.totalRuns + 1;
       final batTeam = _s.setup.bowlingFirst;
       final bowlTeam = _s.setup.battingFirst;
@@ -343,6 +349,9 @@ class _LiveScoringScreenState extends State<LiveScoringScreen> {
       SupabaseService.createInnings(inn2, _s.setup.id).catchError((_) {});
       Future.delayed(Duration.zero, () => _pickOpenersDialog());
     } else {
+      SupabaseService
+          .updateInningsSummary(_inn, _s.setup.id, isCompleted: true)
+          .catchError((_) {});
       _s.isCompleted = true;
       final r1 = _s.innings1?.totalRuns ?? 0;
       final r2 = _s.innings2?.totalRuns ?? 0;

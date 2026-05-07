@@ -39,14 +39,14 @@ class _NewMatchScreenState extends State<NewMatchScreen> {
     }
   }
 
-  void _start() {
+  Future<void> _start() async {
     final setup = MatchSetup(
       id: SupabaseService.newMatchId(),
       teamA: _teamA.text.trim(), teamB: _teamB.text.trim(), venue: _venue.text.trim(),
       overs: int.tryParse(_overs.text.trim()) ?? 20, format: _format, date: _date,
       tossWinner: _tossWinner, electedTo: _electedTo,
-      teamAPlayers: _squadA.map((c) => c.text.trim()).toList(),
-      teamBPlayers: _squadB.map((c) => c.text.trim()).toList(),
+      teamAPlayers: _uniqueNames(_squadA.map((c) => c.text.trim()).toList()),
+      teamBPlayers: _uniqueNames(_squadB.map((c) => c.text.trim()).toList()),
     );
     final batTeam = setup.battingFirst;
     final bowlTeam = setup.bowlingFirst;
@@ -62,10 +62,21 @@ class _NewMatchScreenState extends State<NewMatchScreen> {
     // Persist to local state so it appears in matches list immediately.
     AppStore.of(context).saveScoringSession(session);
 
-    // Persist to backend (fire-and-forget).
-    SupabaseService.createMatch(setup).catchError((_) {});
-    SupabaseService.createInnings(innings, setup.id).catchError((_) {});
+    // Persist to backend in order (match first, then innings) so FK constraints pass.
+    try {
+      await SupabaseService.createMatch(setup);
+      await SupabaseService.createInnings(innings, setup.id);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Could not sync match to Supabase: $e'),
+          backgroundColor: Colors.red.shade700,
+        ),
+      );
+    }
 
+    if (!mounted) return;
     Navigator.pushNamed(context, RoutePaths.liveScoring, arguments: session);
   }
 
@@ -153,8 +164,16 @@ class _NewMatchScreenState extends State<NewMatchScreen> {
     final teams = [if (tA.isNotEmpty) tA, if (tB.isNotEmpty) tB];
     final batFirst = (_tossWinner == tA && _electedTo == 'bat') || (_tossWinner == tB && _electedTo == 'field') ? tA : tB;
     final bowlFirst = batFirst == tA ? tB : tA;
-    final batSquad = batFirst == tA ? _squadA.map((c) => c.text.trim()).where((n) => n.isNotEmpty).toList() : _squadB.map((c) => c.text.trim()).where((n) => n.isNotEmpty).toList();
-    final bowlSquad = bowlFirst == tA ? _squadA.map((c) => c.text.trim()).where((n) => n.isNotEmpty).toList() : _squadB.map((c) => c.text.trim()).where((n) => n.isNotEmpty).toList();
+    final batSquad = _uniqueNames(
+      batFirst == tA
+          ? _squadA.map((c) => c.text.trim()).where((n) => n.isNotEmpty).toList()
+          : _squadB.map((c) => c.text.trim()).where((n) => n.isNotEmpty).toList(),
+    );
+    final bowlSquad = _uniqueNames(
+      bowlFirst == tA
+          ? _squadA.map((c) => c.text.trim()).where((n) => n.isNotEmpty).toList()
+          : _squadB.map((c) => c.text.trim()).where((n) => n.isNotEmpty).toList(),
+    );
     return SingleChildScrollView(padding: const EdgeInsets.all(20), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       _title('Toss & Openers'), const SizedBox(height: 16),
       const Text('Toss Winner', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.grey)), const SizedBox(height: 6),
@@ -186,21 +205,25 @@ class _NewMatchScreenState extends State<NewMatchScreen> {
     ]));
   }
 
-  Widget _dd(String label, List<String> items, String value, ValueChanged<String?> onChanged) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+  Widget _dd(String label, List<String> items, String value, ValueChanged<String?> onChanged) {
+    final uniqueItems = _uniqueNames(items);
+    final safeValue = value.isNotEmpty && uniqueItems.contains(value) ? value : null;
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
     Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.grey)), const SizedBox(height: 6),
     Container(padding: const EdgeInsets.symmetric(horizontal: 16), decoration: BoxDecoration(color: C.gLight, borderRadius: BorderRadius.circular(14)),
-      child: DropdownButtonHideUnderline(child: DropdownButton<String>(isExpanded: true, value: value.isEmpty ? null : value, hint: Text('Select $label', style: const TextStyle(color: C.hint, fontSize: 14)), icon: const Icon(Icons.arrow_drop_down, color: C.g2), style: const TextStyle(color: C.dark, fontSize: 14, fontWeight: FontWeight.w600),
-        items: items.map((p) => DropdownMenuItem(value: p, child: Text(p, style: const TextStyle(color: C.dark)))).toList(),
+      child: DropdownButtonHideUnderline(child: DropdownButton<String>(isExpanded: true, value: safeValue, hint: Text('Select $label', style: const TextStyle(color: C.hint, fontSize: 14)), icon: const Icon(Icons.arrow_drop_down, color: C.g2), style: const TextStyle(color: C.dark, fontSize: 14, fontWeight: FontWeight.w600),
+        items: uniqueItems.map((p) => DropdownMenuItem(value: p, child: Text(p, style: const TextStyle(color: C.dark)))).toList(),
         onChanged: onChanged,
       )),
     ),
   ]);
+  }
 
   Widget _navButtons({bool start = false}) => Row(children: [
     if (_page > 0) Expanded(child: OutlinedButton(onPressed: _prev, style: OutlinedButton.styleFrom(side: const BorderSide(color: C.g2), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.symmetric(vertical: 14)), child: const Text('Back', style: TextStyle(color: C.g2, fontWeight: FontWeight.w700)))),
     if (_page > 0) const SizedBox(width: 12),
     Expanded(child: ElevatedButton(
-      onPressed: _ok ? (start ? _start : _next) : null,
+      onPressed: _ok ? (start ? () => _start() : _next) : null,
       style: ElevatedButton.styleFrom(backgroundColor: C.g2, disabledBackgroundColor: C.gLight, foregroundColor: C.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.symmetric(vertical: 14)),
       child: Text(start ? 'Start Match' : 'Next', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
     )),
@@ -215,4 +238,16 @@ class _NewMatchScreenState extends State<NewMatchScreen> {
   );
 
   String _monthName(int m) => const ['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m];
+
+  List<String> _uniqueNames(List<String> names) {
+    final seen = <String>{};
+    final out = <String>[];
+    for (final raw in names) {
+      final name = raw.trim();
+      if (name.isEmpty || seen.contains(name)) continue;
+      seen.add(name);
+      out.add(name);
+    }
+    return out;
+  }
 }

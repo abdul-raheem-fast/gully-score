@@ -457,8 +457,10 @@ class _DashboardTabState extends State<_DashboardTab>
       });
     final pool = sorted.take(3).toList();
     return pool.map((m) {
-      final result =
-          m.status == MatchStatus.completed ? MatchResult.won : MatchResult.draw;
+      final lowerResult = (m.result ?? '').toLowerCase();
+      final result = lowerResult.contains('tied')
+          ? MatchResult.draw
+          : (m.status == MatchStatus.completed ? MatchResult.won : MatchResult.draw);
       return PlayerMatch(
         id: m.id,
         myTeam: m.teamA,
@@ -894,7 +896,7 @@ class _MatchCard extends StatelessWidget {
           Row(
             children: [
               // My team
-              _TeamChip(abbr: match.myTeamAbbr, name: match.myTeam),
+              _TeamChip(abbr: match.myTeamAbbr, name: ''),
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 10),
                 child: Text('vs',
@@ -908,6 +910,12 @@ class _MatchCard extends StatelessWidget {
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                  Text('${match.myTeam} vs ${match.opponent}',
+                      style: const TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: C.dark)),
+                  const SizedBox(height: 2),
                   Text(match.myTeamScore,
                       style: const TextStyle(
                           fontSize: 13.5,
@@ -919,7 +927,7 @@ class _MatchCard extends StatelessWidget {
                           const TextStyle(fontSize: 12, color: C.grey)),
                 ]),
               ),
-              _TeamChip(abbr: match.opponentAbbr, name: match.opponent),
+              _TeamChip(abbr: match.opponentAbbr, name: ''),
             ],
           ),
 
