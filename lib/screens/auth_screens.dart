@@ -649,28 +649,15 @@ class _LoginScreenState extends State<LoginScreen>
                   const SizedBox(height: 20),
 
                   // Social buttons — exactly as Figma
-                  Row(children: [
-                    Expanded(
-                      child: _SocialBtn(
-                        label: 'Google',
-                        icon: const Text('G',
-                            style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF4285F4))),
-                        onTap: _signIn,
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: _SocialBtn(
-                        label: 'Apple',
-                        icon: const Icon(Icons.apple,
-                            size: 22, color: C.dark),
-                        onTap: _signIn,
-                      ),
-                    ),
-                  ]),
+                  _SocialBtn(
+                    label: 'Google',
+                    icon: const Text('G',
+                        style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF4285F4))),
+                    onTap: _signIn,
+                  ),
 
                   const SizedBox(height: 32),
 
