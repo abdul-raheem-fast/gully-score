@@ -14,6 +14,7 @@ class RoutePaths {
   static const adminReports = '/admin/reports';
   static const adminSettings = '/admin/settings';
   static const adminProfile = '/admin/profile';
+  static const adminEditProfile = '/admin/profile/edit';
 
   static const newMatch = '/player/new-match';
   static const liveScoring = '/player/live-scoring';

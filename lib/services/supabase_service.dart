@@ -85,6 +85,34 @@ class SupabaseService {
     });
   }
 
+  static Future<void> updateAdminProfile({
+    required String userId,
+    required String name,
+    required String organization,
+  }) async {
+    final currentUser = client.auth.currentUser;
+    if (currentUser == null) {
+      throw StateError('No authenticated user found.');
+    }
+
+    final attributes = UserAttributes(
+      data: {
+        'name': name.trim(),
+        'organization': organization.trim(),
+      },
+    );
+
+    await client.auth.updateUser(attributes);
+
+    await upsertUserProfile(
+      userId: userId,
+      email: currentUser.email ?? '',
+      name: name,
+      role: currentUser.userMetadata?['app_role']?.toString() ?? 'admin',
+      organization: organization.isEmpty ? null : organization,
+    );
+  }
+
   static Future<List<Map<String, dynamic>>> fetchProfiles() async {
     final response = await client
         .from('profiles')

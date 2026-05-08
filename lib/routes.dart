@@ -4,6 +4,7 @@ import 'models/scoring_models.dart';
 import 'route_paths.dart';
 
 import 'screens/admin/admin_dashboard_screen.dart';
+import 'screens/admin/admin_edit_profile_screen.dart';
 import 'screens/admin/admin_matches_screen.dart';
 import 'screens/admin/admin_profile_screen.dart';
 import 'screens/admin/admin_reports_screen.dart';
@@ -33,6 +34,7 @@ class AppRoutes {
       case RoutePaths.adminUsers: page = const AdminUsersScreen(); break;
       case RoutePaths.adminMatches: page = const AdminMatchesScreen(); break;
       case RoutePaths.adminProfile: page = const AdminProfileScreen(); break;
+      case RoutePaths.adminEditProfile: page = const AdminEditProfileScreen(); break;
       case RoutePaths.adminTeams: page = const AdminTeamsScreen(); break;
       case RoutePaths.adminReports: page = const AdminReportsScreen(); break;
       case RoutePaths.adminSettings: page = const AdminSettingsScreen(); break;

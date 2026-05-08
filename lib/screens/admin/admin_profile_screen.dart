@@ -136,9 +136,7 @@ class AdminProfileScreen extends StatelessWidget {
                     icon: Icons.edit_outlined,
                     filled: true,
                     onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Profile editing is not available yet.')),
-                      );
+                      Navigator.pushNamed(context, RoutePaths.adminEditProfile);
                     },
                   ),
                   const SizedBox(height: 12),
