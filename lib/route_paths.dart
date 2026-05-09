@@ -5,6 +5,8 @@ class RoutePaths {
   static const roleSelect = '/role-select';
   static const login = '/login';
   static const signup = '/signup';
+  static const forgotPassword = '/forgot-password';
+  static const otpReset = '/otp-reset';
   static const home = '/home';
 
   static const admin = '/admin';

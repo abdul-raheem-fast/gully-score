@@ -435,6 +435,20 @@ class _LoginScreenState extends State<LoginScreen>
     });
   }
 
+  Future<void> _signInWithGoogle() async {
+    setState(() => _loading = true);
+    try {
+      await SupabaseService.signInWithGoogle();
+      // On web, the page redirects to Google — no further action needed here.
+      // On mobile, Supabase deep-link callback handles the session.
+    } catch (e) {
+      if (!mounted) return;
+      _showError(e.toString().replaceFirst('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
   Future<void> _signIn() async {
     final email = _emailCtrl.text.trim();
     final password = _passCtrl.text;
@@ -607,7 +621,8 @@ class _LoginScreenState extends State<LoginScreen>
                   Align(
                     alignment: Alignment.centerRight,
                     child: GestureDetector(
-                      onTap: () {},
+                      onTap: () => Navigator.pushNamed(
+                          context, '/forgot-password'),
                       child: Text(
                         'Forgot Password?',
                         style: TextStyle(
@@ -650,13 +665,13 @@ class _LoginScreenState extends State<LoginScreen>
 
                   // Social buttons — exactly as Figma
                   _SocialBtn(
-                    label: 'Google',
+                    label: 'Continue with Google',
                     icon: const Text('G',
                         style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                             color: Color(0xFF4285F4))),
-                    onTap: _signIn,
+                    onTap: _signInWithGoogle,
                   ),
 
                   const SizedBox(height: 32),
@@ -1142,6 +1157,292 @@ class _SocialBtn extends StatelessWidget {
                   fontSize: 14,
                   color: C.dark)),
         ]),
+      ),
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════
+//  FORGOT PASSWORD — sends OTP to email
+// ════════════════════════════════════════════════════════
+class ForgotPasswordScreen extends StatefulWidget {
+  const ForgotPasswordScreen({super.key});
+
+  @override
+  State<ForgotPasswordScreen> createState() => _ForgotPasswordScreenState();
+}
+
+class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
+  final _emailCtrl = TextEditingController();
+  bool _loading = false;
+
+  @override
+  void dispose() {
+    _emailCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    final email = _emailCtrl.text.trim();
+    if (email.isEmpty) {
+      _showMsg('Enter your email address', isError: true);
+      return;
+    }
+    setState(() => _loading = true);
+    try {
+      await SupabaseService.sendPasswordResetOtp(email);
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(
+        context,
+        '/otp-reset',
+        arguments: email,
+      );
+    } on AuthException catch (e) {
+      if (!mounted) return;
+      _showMsg(e.message, isError: true);
+    } catch (_) {
+      if (!mounted) return;
+      _showMsg('Failed to send OTP. Check your email and try again.',
+          isError: true);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _showMsg(String msg, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      backgroundColor: isError ? Colors.red.shade600 : C.g2,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: C.white,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                      color: C.gLight,
+                      borderRadius: BorderRadius.circular(13)),
+                  child: const Icon(Icons.arrow_back_ios_new,
+                      size: 16, color: C.dark),
+                ),
+              ),
+              const SizedBox(height: 28),
+              RichText(
+                text: const TextSpan(children: [
+                  TextSpan(
+                    text: 'Forgot\nPassword? ',
+                    style: TextStyle(
+                        fontSize: 34,
+                        fontWeight: FontWeight.w900,
+                        color: C.dark,
+                        height: 1.2),
+                  ),
+                  TextSpan(text: '🔑', style: TextStyle(fontSize: 28)),
+                ]),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                "Enter your email and we'll send a 6-digit OTP.",
+                style: TextStyle(color: C.grey, fontSize: 15),
+              ),
+              const SizedBox(height: 36),
+              AppField(
+                label: 'Email Address',
+                hint: 'you@example.com',
+                icon: Icons.email_outlined,
+                ctrl: _emailCtrl,
+                keyType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _send(),
+              ),
+              const SizedBox(height: 28),
+              _loading
+                  ? const Center(child: CircularProgressIndicator(color: C.g1))
+                  : AppButton(
+                      label: 'Send OTP',
+                      onTap: _send,
+                      color: C.g1,
+                    ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ════════════════════════════════════════════════════════
+//  OTP RESET — verify OTP + set new password
+// ════════════════════════════════════════════════════════
+class OtpResetScreen extends StatefulWidget {
+  const OtpResetScreen({super.key});
+
+  @override
+  State<OtpResetScreen> createState() => _OtpResetScreenState();
+}
+
+class _OtpResetScreenState extends State<OtpResetScreen> {
+  final _otpCtrl = TextEditingController();
+  final _passCtrl = TextEditingController();
+  bool _obscure = true;
+  bool _loading = false;
+  late String _email;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _email = (ModalRoute.of(context)?.settings.arguments as String?) ?? '';
+  }
+
+  @override
+  void dispose() {
+    _otpCtrl.dispose();
+    _passCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _verify() async {
+    final otp = _otpCtrl.text.trim();
+    final pass = _passCtrl.text;
+    if (otp.length < 6 || otp.length > 8) {
+      _showMsg('Enter the verification code from your email', isError: true);
+      return;
+    }
+    if (pass.length < 8) {
+      _showMsg('Password must be at least 8 characters', isError: true);
+      return;
+    }
+    setState(() => _loading = true);
+    try {
+      await SupabaseService.verifyOtpAndResetPassword(
+        email: _email,
+        token: otp,
+        newPassword: pass,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: const Text('Password reset! Please sign in.'),
+        backgroundColor: C.g2,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ));
+      Navigator.pushNamedAndRemoveUntil(
+          context, RoutePaths.login, (r) => false);
+    } on AuthException catch (e) {
+      if (!mounted) return;
+      _showMsg(e.message, isError: true);
+    } catch (_) {
+      if (!mounted) return;
+      _showMsg('Invalid or expired OTP. Try again.', isError: true);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _showMsg(String msg, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(msg),
+      backgroundColor: isError ? Colors.red.shade600 : C.g2,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: C.white,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              GestureDetector(
+                onTap: () => Navigator.pop(context),
+                child: Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                      color: C.gLight,
+                      borderRadius: BorderRadius.circular(13)),
+                  child: const Icon(Icons.arrow_back_ios_new,
+                      size: 16, color: C.dark),
+                ),
+              ),
+              const SizedBox(height: 28),
+              RichText(
+                text: const TextSpan(children: [
+                  TextSpan(
+                    text: 'Reset\nPassword ',
+                    style: TextStyle(
+                        fontSize: 34,
+                        fontWeight: FontWeight.w900,
+                        color: C.dark,
+                        height: 1.2),
+                  ),
+                  TextSpan(text: '🔒', style: TextStyle(fontSize: 28)),
+                ]),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'OTP sent to $_email',
+                style: const TextStyle(color: C.grey, fontSize: 15),
+              ),
+              const SizedBox(height: 36),
+              AppField(
+                label: '6-digit OTP',
+                hint: '123456',
+                icon: Icons.pin_outlined,
+                ctrl: _otpCtrl,
+                keyType: TextInputType.number,
+                textInputAction: TextInputAction.next,
+              ),
+              const SizedBox(height: 20),
+              AppField(
+                label: 'New Password',
+                hint: '••••••••',
+                icon: Icons.lock_outline,
+                obscure: _obscure,
+                ctrl: _passCtrl,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _verify(),
+                suffix: GestureDetector(
+                  onTap: () => setState(() => _obscure = !_obscure),
+                  child: Icon(
+                    _obscure
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    color: C.hint,
+                    size: 20,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 28),
+              _loading
+                  ? const Center(child: CircularProgressIndicator(color: C.g1))
+                  : AppButton(
+                      label: 'Reset Password',
+                      onTap: _verify,
+                      color: C.g1,
+                    ),
+            ],
+          ),
+        ),
       ),
     );
   }

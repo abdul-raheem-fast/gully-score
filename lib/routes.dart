@@ -42,6 +42,12 @@ class AppRoutes {
       case RoutePaths.signup:
         page = const SignUpScreen();
         break;
+      case RoutePaths.forgotPassword:
+        page = const ForgotPasswordScreen();
+        break;
+      case RoutePaths.otpReset:
+        page = const OtpResetScreen();
+        break;
       case RoutePaths.home:
         page = const PlayerHomeScreen();
         break;

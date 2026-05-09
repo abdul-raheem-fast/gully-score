@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../models/admin_models.dart';
@@ -37,6 +38,41 @@ class SupabaseService {
       currentUser?.userMetadata?['name']?.toString();
 
   static Future<void> signOut() => client.auth.signOut();
+
+  static Future<void> signInWithGoogle() async {
+    await client.auth.signInWithOAuth(
+      OAuthProvider.google,
+      redirectTo: kIsWeb ? 'http://localhost:3000/' : 'io.supabase.gullyscore://login-callback',
+    );
+  }
+
+  static Future<void> sendMagicLink(String email) {
+    return client.auth.signInWithOtp(
+      email: email.trim(),
+      shouldCreateUser: false,
+      emailRedirectTo: kIsWeb ? 'http://localhost:3000/' : 'io.supabase.gullyscore://login-callback',
+    );
+  }
+
+  static Future<void> sendPasswordResetOtp(String email) {
+    return client.auth.resetPasswordForEmail(
+      email.trim(),
+    );
+  }
+
+  static Future<AuthResponse> verifyOtpAndResetPassword({
+    required String email,
+    required String token,
+    required String newPassword,
+  }) async {
+    final response = await client.auth.verifyOTP(
+      email: email.trim(),
+      token: token.trim(),
+      type: OtpType.recovery,
+    );
+    await client.auth.updateUser(UserAttributes(password: newPassword));
+    return response;
+  }
 
   static Future<AuthResponse> signUpWithEmail({
     required String email,
