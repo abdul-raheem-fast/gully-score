@@ -199,6 +199,7 @@ class _MyTeamsScreenState extends State<MyTeamsScreen>
             pinned: true,
             backgroundColor: const Color(0xFF1B5E20),
             foregroundColor: Colors.white,
+            automaticallyImplyLeading: false,
             expandedHeight: 130,
             flexibleSpace: FlexibleSpaceBar(
               titlePadding: const EdgeInsets.fromLTRB(20, 0, 20, 56),
@@ -207,14 +208,46 @@ class _MyTeamsScreenState extends State<MyTeamsScreen>
                       fontWeight: FontWeight.w800,
                       fontSize: 22,
                       color: Colors.white)),
-              background: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF1B5E20), Color(0xFF388E3C)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+              background: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Color(0xFF1B5E20), Color(0xFF388E3C)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                    ),
                   ),
-                ),
+                  Positioned(
+                    top: MediaQuery.of(context).padding.top + 8,
+                    left: 16,
+                    child: GestureDetector(
+                      onTap: () => Navigator.of(context).pop(),
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withAlpha(12),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.arrow_back_ios_new_rounded,
+                          color: C.dark,
+                          size: 18,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
             bottom: TabBar(

@@ -119,3 +119,28 @@ class PlayerStats {
     required this.strikeRate,
   });
 }
+
+/// Player record used in the Rankings leaderboard.
+class PlayerRanking {
+  final String name;
+  final String initials;
+  final String teamName;
+  final int matches;
+  final int runs;
+  final double average;
+  final double strikeRate;
+  final int wickets;
+  final double rating;
+
+  const PlayerRanking({
+    required this.name,
+    required this.initials,
+    required this.teamName,
+    required this.matches,
+    required this.runs,
+    required this.average,
+    required this.strikeRate,
+    required this.wickets,
+    required this.rating,
+  });
+}

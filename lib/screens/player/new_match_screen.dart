@@ -92,7 +92,27 @@ class _NewMatchScreenState extends State<NewMatchScreen> {
       appBar: AppBar(
         backgroundColor: C.white, elevation: 0, surfaceTintColor: C.white,
         title: const Text('New Match', style: TextStyle(color: C.dark, fontWeight: FontWeight.w800, fontSize: 18)),
-        leading: IconButton(icon: const Icon(Icons.arrow_back, color: C.dark), onPressed: () => Navigator.pop(context)),
+        automaticallyImplyLeading: false,
+        leading: Container(
+          width: 40,
+          height: 40,
+          margin: const EdgeInsets.only(left: 8),
+          decoration: BoxDecoration(
+            color: C.white,
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withAlpha(12),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, color: C.dark, size: 18),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ),
         bottom: PreferredSize(preferredSize: const Size.fromHeight(3), child: LinearProgressIndicator(value: (_page + 1) / 4, backgroundColor: C.gLight, valueColor: const AlwaysStoppedAnimation<Color>(C.g2), minHeight: 3)),
       ),
       body: PageView(controller: _pageCtrl, physics: const NeverScrollableScrollPhysics(), onPageChanged: (i) => setState(() => _page = i),

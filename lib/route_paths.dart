@@ -25,4 +25,5 @@ class RoutePaths {
   static const liveScoring = '/player/live-scoring';
   static const matchScorecard = '/player/match-scorecard';
   static const aiChat = '/player/ai-chat';
+  static const rankings = '/player/rankings';
 }

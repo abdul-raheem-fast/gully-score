@@ -355,8 +355,9 @@ class _DashboardTabState extends State<_DashboardTab>
                         builder: (_) => const MyTeamsScreen()),
                   ),
                   onAnalytics: widget.onOpenStats,
-                  onRankings: () => ScaffoldMessenger.of(context).showSnackBar(
-                    _snack('Rankings — coming soon'),
+                  onRankings: () => Navigator.pushNamed(
+                    context,
+                    RoutePaths.rankings,
                   ),
                 ),
               ),
@@ -504,12 +505,6 @@ class _DashboardTabState extends State<_DashboardTab>
     return cleaned.length >= 2 ? cleaned.substring(0, 2) : cleaned;
   }
 
-  SnackBar _snack(String msg) => SnackBar(
-        content: Text(msg),
-        backgroundColor: C.g2,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      );
 }
 
 // ─────────────────────────────────────────────────────────────
