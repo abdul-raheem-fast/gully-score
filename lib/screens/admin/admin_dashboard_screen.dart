@@ -50,6 +50,9 @@ class _AdminDashboardLayoutState extends State<_AdminDashboardLayout> {
       case _AdminNav.settings:
         Navigator.pushNamed(context, RoutePaths.adminSettings);
         break;
+      case _AdminNav.ai:
+        Navigator.pushNamed(context, RoutePaths.adminAiChat);
+        break;
       case _AdminNav.reports:
         Navigator.pushNamed(context, RoutePaths.adminReports);
         break;
@@ -82,8 +85,8 @@ class _AdminDashboardLayoutState extends State<_AdminDashboardLayout> {
                   color: C.bg,
                   child: SafeArea(
                     child: Padding(
-                      padding:
-                          EdgeInsets.fromLTRB(horizPad, topPad, horizPad, bottomPad),
+                      padding: EdgeInsets.fromLTRB(
+                          horizPad, topPad, horizPad, bottomPad),
                       child: _DashboardBody(
                         onMenuTap: () {
                           if (showSidebar) {
@@ -103,7 +106,8 @@ class _AdminDashboardLayoutState extends State<_AdminDashboardLayout> {
 
         if (showSidebar) {
           return Scaffold(
-            body: Builder(builder: (scaffoldContext) => buildBody(scaffoldContext)),
+            body: Builder(
+                builder: (scaffoldContext) => buildBody(scaffoldContext)),
           );
         }
 
@@ -117,14 +121,25 @@ class _AdminDashboardLayoutState extends State<_AdminDashboardLayout> {
               },
             ),
           ),
-          body: Builder(builder: (scaffoldContext) => buildBody(scaffoldContext)),
+          body:
+              Builder(builder: (scaffoldContext) => buildBody(scaffoldContext)),
         );
       },
     );
   }
 }
 
-enum _AdminNav { dashboard, matches, teams, players, inbox, users, settings, reports }
+enum _AdminNav {
+  dashboard,
+  matches,
+  teams,
+  players,
+  inbox,
+  users,
+  settings,
+  ai,
+  reports
+}
 
 class _Sidebar extends StatelessWidget {
   final _AdminNav selected;
@@ -219,6 +234,12 @@ class _Sidebar extends StatelessWidget {
                     label: 'Settings',
                     active: selected == _AdminNav.settings,
                     onTap: () => onSelect(_AdminNav.settings),
+                  ),
+                  _navItem(
+                    icon: Icons.auto_awesome_outlined,
+                    label: 'Broskie AI',
+                    active: selected == _AdminNav.ai,
+                    onTap: () => onSelect(_AdminNav.ai),
                   ),
                   _navItem(
                     icon: Icons.bar_chart_outlined,
@@ -429,7 +450,8 @@ class _DashboardBody extends StatelessWidget {
                   children: [
                     Expanded(child: _RecentMatchesCard(matches: recentMatches)),
                     SizedBox(width: 14),
-                    Expanded(child: _TopTeamsCard(teams: topTeams.take(5).toList())),
+                    Expanded(
+                        child: _TopTeamsCard(teams: topTeams.take(5).toList())),
                   ],
                 ),
               const SizedBox(height: 18),
@@ -519,7 +541,8 @@ class _TopBar extends StatelessWidget {
             ),
             const SizedBox(width: 10),
             _avatar(
-              onTap: () => Navigator.pushNamed(context, RoutePaths.adminProfile),
+              onTap: () =>
+                  Navigator.pushNamed(context, RoutePaths.adminProfile),
             ),
           ],
         );
@@ -556,7 +579,8 @@ class _TopBar extends StatelessWidget {
             child: Container(
               width: 8,
               height: 8,
-              decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
+              decoration:
+                  BoxDecoration(color: dotColor, shape: BoxShape.circle),
             ),
           ),
       ],
@@ -604,17 +628,31 @@ class _KpiCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4))
+        ],
         border: Border.all(color: Colors.black.withOpacity(0.05)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: TextStyle(color: C.grey, fontWeight: FontWeight.w700, fontSize: 12.5, height: 1.2)),
+          Text(title,
+              style: TextStyle(
+                  color: C.grey,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12.5,
+                  height: 1.2)),
           const SizedBox(height: 8),
-          Text(value, style: TextStyle(color: accent, fontWeight: FontWeight.w900, fontSize: 28)),
+          Text(value,
+              style: TextStyle(
+                  color: accent, fontWeight: FontWeight.w900, fontSize: 28)),
           const SizedBox(height: 6),
-          Text(sub, style: TextStyle(color: accent, fontWeight: FontWeight.w700, fontSize: 12.5)),
+          Text(sub,
+              style: TextStyle(
+                  color: accent, fontWeight: FontWeight.w700, fontSize: 12.5)),
         ],
       ),
     );
@@ -676,7 +714,8 @@ class _Panel extends StatelessWidget {
   final String title;
   final Widget trailing;
   final Widget child;
-  const _Panel({required this.title, required this.trailing, required this.child});
+  const _Panel(
+      {required this.title, required this.trailing, required this.child});
 
   @override
   Widget build(BuildContext context) {
@@ -685,14 +724,24 @@ class _Panel extends StatelessWidget {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(18),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))],
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4))
+        ],
         border: Border.all(color: Colors.black.withOpacity(0.05)),
       ),
       child: Column(
         children: [
           Row(
             children: [
-              Text(title, style: TextStyle(color: C.grey.withOpacity(0.9), fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 1.1)),
+              Text(title,
+                  style: TextStyle(
+                      color: C.grey.withOpacity(0.9),
+                      fontWeight: FontWeight.w900,
+                      fontSize: 12,
+                      letterSpacing: 1.1)),
               const Spacer(),
               trailing,
             ],
@@ -709,7 +758,8 @@ class _MatchRow extends StatelessWidget {
   final String teamA;
   final String teamB;
   final MatchStatus status;
-  const _MatchRow({required this.teamA, required this.teamB, required this.status});
+  const _MatchRow(
+      {required this.teamA, required this.teamB, required this.status});
 
   @override
   Widget build(BuildContext context) {
@@ -719,9 +769,12 @@ class _MatchRow extends StatelessWidget {
       MatchStatus.completed => Colors.black.withOpacity(0.18),
     };
     final chip = switch (status) {
-      MatchStatus.live => _pill('Live', const Color(0xFF2E7D32), const Color(0xFFE8F5E9)),
-      MatchStatus.upcoming => _pill('Upcoming', const Color(0xFFFF6B00), const Color(0xFFFFF3E0)),
-      MatchStatus.completed => _pill('Done', const Color(0xFF757575), const Color(0xFFF1F3F4)),
+      MatchStatus.live =>
+        _pill('Live', const Color(0xFF2E7D32), const Color(0xFFE8F5E9)),
+      MatchStatus.upcoming =>
+        _pill('Upcoming', const Color(0xFFFF6B00), const Color(0xFFFFF3E0)),
+      MatchStatus.completed =>
+        _pill('Done', const Color(0xFF757575), const Color(0xFFF1F3F4)),
     };
 
     return Padding(
@@ -737,7 +790,8 @@ class _MatchRow extends StatelessWidget {
           Expanded(
             child: Text(
               '$teamA vs $teamB',
-              style: const TextStyle(color: C.dark, fontWeight: FontWeight.w700),
+              style:
+                  const TextStyle(color: C.dark, fontWeight: FontWeight.w700),
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -750,8 +804,11 @@ class _MatchRow extends StatelessWidget {
   Widget _pill(String text, Color fg, Color bg) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
-      child: Text(text, style: TextStyle(color: fg, fontWeight: FontWeight.w800, fontSize: 12)),
+      decoration:
+          BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
+      child: Text(text,
+          style:
+              TextStyle(color: fg, fontWeight: FontWeight.w800, fontSize: 12)),
     );
   }
 }
@@ -782,14 +839,19 @@ class _TeamRow extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
             ),
             child: Center(
-              child: Text(code, style: TextStyle(color: color, fontWeight: FontWeight.w900)),
+              child: Text(code,
+                  style: TextStyle(color: color, fontWeight: FontWeight.w900)),
             ),
           ),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(name, style: const TextStyle(color: C.dark, fontWeight: FontWeight.w800)),
+            child: Text(name,
+                style: const TextStyle(
+                    color: C.dark, fontWeight: FontWeight.w800)),
           ),
-          Text(wins, style: const TextStyle(color: C.grey, fontWeight: FontWeight.w800)),
+          Text(wins,
+              style:
+                  const TextStyle(color: C.grey, fontWeight: FontWeight.w800)),
           const SizedBox(width: 14),
           Container(
             width: 92,

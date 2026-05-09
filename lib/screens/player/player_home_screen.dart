@@ -10,6 +10,7 @@ import 'player_matches_screen.dart';
 import 'player_stats_screen.dart';
 import 'player_profile_screen.dart';
 import 'my_teams_screen.dart';
+import 'ai_chat_screen.dart';
 
 
 class PlayerHomeScreen extends StatefulWidget {
@@ -30,6 +31,7 @@ class _PlayerHomeScreenState extends State<PlayerHomeScreen> {
       _DashboardTab(onOpenStats: _openStatsTab),
       const PlayerMatchesScreen(),
       const PlayerStatsScreen(),
+      const AiChatScreen(),
       const PlayerProfileScreen(),
     ];
   }
@@ -61,6 +63,7 @@ class _BottomNav extends StatelessWidget {
     _NavItem(Icons.home_outlined, Icons.home_rounded, 'Home'),
     _NavItem(Icons.sports_cricket_outlined, Icons.sports_cricket, 'Matches'),
     _NavItem(Icons.bolt_outlined, Icons.bolt_rounded, 'Stats'),
+    _NavItem(Icons.auto_awesome_outlined, Icons.auto_awesome_rounded, 'Broskie'),
     _NavItem(Icons.person_outline_rounded, Icons.person_rounded, 'Profile'),
   ];
 

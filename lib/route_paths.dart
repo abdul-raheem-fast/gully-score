@@ -15,10 +15,12 @@ class RoutePaths {
   static const adminTeams = '/admin/teams';
   static const adminReports = '/admin/reports';
   static const adminSettings = '/admin/settings';
+  static const adminAiChat = '/admin/ai-chat';
   static const adminProfile = '/admin/profile';
   static const adminEditProfile = '/admin/profile/edit';
 
   static const newMatch = '/player/new-match';
   static const liveScoring = '/player/live-scoring';
   static const matchScorecard = '/player/match-scorecard';
+  static const aiChat = '/player/ai-chat';
 }
