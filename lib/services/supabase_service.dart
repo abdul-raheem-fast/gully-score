@@ -727,6 +727,38 @@ class SupabaseService {
     }).toList();
   }
 
+  /// Fetch all team_memberships rows for admin (typically pending ones).
+  static Future<List<TeamMembership>> fetchAdminMemberships() async {
+    final response = await client
+        .from('team_memberships')
+        .select()
+        .order('applied_at', ascending: false);
+    final rows = List<Map<String, dynamic>>.from(response);
+    return rows.map((row) {
+      final statusRaw = (row['status'] as String?) ?? 'pending';
+      MembershipStatus status;
+      switch (statusRaw) {
+        case 'approved':
+          status = MembershipStatus.approved;
+          break;
+        case 'rejected':
+          status = MembershipStatus.rejected;
+          break;
+        default:
+          status = MembershipStatus.pending;
+      }
+      return TeamMembership(
+        id: row['id']?.toString() ?? '',
+        teamId: row['team_name']?.toString() ?? '',
+        teamName: row['team_name']?.toString() ?? '',
+        teamAbbreviation: row['team_abbreviation']?.toString() ?? '',
+        status: status,
+        appliedAt: DateTime.tryParse(row['applied_at']?.toString() ?? '') ??
+            DateTime.now(),
+      );
+    }).toList();
+  }
+
   /// Returns team names where the current user is captain in `players` or in `teams`.
   static Future<List<String>> fetchCaptainTeams() async {
     final userId = currentUser?.id;

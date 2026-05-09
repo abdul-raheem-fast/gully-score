@@ -41,6 +41,9 @@ class _AdminDashboardLayoutState extends State<_AdminDashboardLayout> {
       case _AdminNav.players:
         Navigator.pushNamed(context, RoutePaths.adminPlayers);
         break;
+      case _AdminNav.inbox:
+        Navigator.pushNamed(context, RoutePaths.adminInbox);
+        break;
       case _AdminNav.users:
         Navigator.pushNamed(context, RoutePaths.adminUsers);
         break;
@@ -121,7 +124,7 @@ class _AdminDashboardLayoutState extends State<_AdminDashboardLayout> {
   }
 }
 
-enum _AdminNav { dashboard, matches, teams, players, users, settings, reports }
+enum _AdminNav { dashboard, matches, teams, players, inbox, users, settings, reports }
 
 class _Sidebar extends StatelessWidget {
   final _AdminNav selected;
@@ -196,6 +199,12 @@ class _Sidebar extends StatelessWidget {
                     label: 'Players',
                     active: selected == _AdminNav.players,
                     onTap: () => onSelect(_AdminNav.players),
+                  ),
+                  _navItem(
+                    icon: Icons.inbox_outlined,
+                    label: 'Inbox',
+                    active: selected == _AdminNav.inbox,
+                    onTap: () => onSelect(_AdminNav.inbox),
                   ),
                   const SizedBox(height: 12),
                   _sectionLabel('SYSTEM'),
@@ -506,12 +515,7 @@ class _TopBar extends StatelessWidget {
             _iconBubble(
               icon: Icons.mail_outline,
               dotColor: Colors.red.shade600,
-              onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Inbox coming soon'),
-                  behavior: SnackBarBehavior.floating,
-                ),
-              ),
+              onTap: () => Navigator.pushNamed(context, RoutePaths.adminInbox),
             ),
             const SizedBox(width: 10),
             _avatar(

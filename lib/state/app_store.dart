@@ -44,9 +44,13 @@ class AppStoreState extends State<AppStore> {
   String? usersLoadError;
   bool isLoadingMemberships = false;
   String? membershipsLoadError;
+  bool isLoadingAdminMemberships = false;
+  String? adminMembershipsLoadError;
 
   final List<TeamMembership> _myMemberships = [];
   List<TeamMembership> get myMemberships => List.unmodifiable(_myMemberships);
+  final List<TeamMembership> _adminMemberships = [];
+  List<TeamMembership> get adminMemberships => List.unmodifiable(_adminMemberships);
 
   final List<AuthUser> _users = [];
 
@@ -70,6 +74,7 @@ class AppStoreState extends State<AppStore> {
     _hydrateTeams();
     _hydrateUsers();
     _hydrateMyMemberships();
+    _hydrateAdminMemberships();
   }
 
   void _hydrateAuthSession() {
@@ -226,6 +231,32 @@ class AppStoreState extends State<AppStore> {
 
   Future<void> refreshMyMemberships() => _hydrateMyMemberships();
 
+  Future<void> _hydrateAdminMemberships() async {
+    setState(() {
+      isLoadingAdminMemberships = true;
+      adminMembershipsLoadError = null;
+    });
+    try {
+      final memberships = await SupabaseService.fetchAdminMemberships();
+      if (!mounted) return;
+      setState(() {
+        _adminMemberships
+          ..clear()
+          ..addAll(memberships);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        adminMembershipsLoadError = 'Could not load admin memberships.';
+      });
+    } finally {
+      if (!mounted) return;
+      setState(() => isLoadingAdminMemberships = false);
+    }
+  }
+
+  Future<void> refreshAdminMemberships() => _hydrateAdminMemberships();
+
   /// Apply for a team. Optimistically inserts a pending record, then syncs.
   Future<void> applyToTeam(TeamInfo team) async {
     // Optimistic insert.
@@ -255,6 +286,36 @@ class AppStoreState extends State<AppStore> {
       setState(() {
         _myMemberships.removeWhere((m) => m.id == optimistic.id);
         membershipsLoadError = 'Failed to apply. Please try again.';
+      });
+    }
+  }
+
+  /// Update membership status (approve/reject).
+  Future<void> updateMembershipStatus(String id, MembershipStatus status) async {
+    final index = _adminMemberships.indexWhere((m) => m.id == id);
+    if (index == -1) return;
+    final old = _adminMemberships[index];
+    setState(() {
+      _adminMemberships[index] = TeamMembership(
+        id: old.id,
+        teamId: old.teamId,
+        teamName: old.teamName,
+        teamAbbreviation: old.teamAbbreviation,
+        status: status,
+        appliedAt: old.appliedAt,
+      );
+    });
+    try {
+      await SupabaseService.updateMembershipStatus(
+        id: id,
+        status: status.name,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      // Roll back.
+      setState(() {
+        _adminMemberships[index] = old;
+        adminMembershipsLoadError = 'Failed to update status.';
       });
     }
   }
