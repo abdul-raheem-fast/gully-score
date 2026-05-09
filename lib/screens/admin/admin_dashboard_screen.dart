@@ -50,9 +50,6 @@ class _AdminDashboardLayoutState extends State<_AdminDashboardLayout> {
       case _AdminNav.settings:
         Navigator.pushNamed(context, RoutePaths.adminSettings);
         break;
-      case _AdminNav.ai:
-        Navigator.pushNamed(context, RoutePaths.adminAiChat);
-        break;
       case _AdminNav.reports:
         Navigator.pushNamed(context, RoutePaths.adminReports);
         break;
@@ -106,12 +103,18 @@ class _AdminDashboardLayoutState extends State<_AdminDashboardLayout> {
 
         if (showSidebar) {
           return Scaffold(
+            floatingActionButton: _AiFab(
+              onTap: () => Navigator.pushNamed(context, RoutePaths.adminAiChat),
+            ),
             body: Builder(
                 builder: (scaffoldContext) => buildBody(scaffoldContext)),
           );
         }
 
         return Scaffold(
+          floatingActionButton: _AiFab(
+            onTap: () => Navigator.pushNamed(context, RoutePaths.adminAiChat),
+          ),
           drawer: Drawer(
             child: _Sidebar(
               selected: _selected,
@@ -137,7 +140,6 @@ enum _AdminNav {
   inbox,
   users,
   settings,
-  ai,
   reports
 }
 
@@ -234,12 +236,6 @@ class _Sidebar extends StatelessWidget {
                     label: 'Settings',
                     active: selected == _AdminNav.settings,
                     onTap: () => onSelect(_AdminNav.settings),
-                  ),
-                  _navItem(
-                    icon: Icons.auto_awesome_outlined,
-                    label: 'Broskie AI',
-                    active: selected == _AdminNav.ai,
-                    onTap: () => onSelect(_AdminNav.ai),
                   ),
                   _navItem(
                     icon: Icons.bar_chart_outlined,
@@ -366,6 +362,43 @@ class _Sidebar extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _AiFab extends StatelessWidget {
+  final VoidCallback onTap;
+  const _AiFab({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF2E7D32), Color(0xFF1B5E20)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: C.g1.withOpacity(0.35),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: FloatingActionButton.extended(
+        heroTag: 'admin_broskie_ai_fab',
+        onPressed: onTap,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        label: const Text(
+          'Broskie AI',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
+        icon: const Icon(Icons.auto_awesome_rounded),
       ),
     );
   }
