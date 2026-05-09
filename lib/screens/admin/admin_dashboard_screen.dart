@@ -39,12 +39,7 @@ class _AdminDashboardLayoutState extends State<_AdminDashboardLayout> {
         Navigator.pushNamed(context, RoutePaths.adminTeams);
         break;
       case _AdminNav.players:
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Players screen coming soon'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        Navigator.pushNamed(context, RoutePaths.adminPlayers);
         break;
       case _AdminNav.users:
         Navigator.pushNamed(context, RoutePaths.adminUsers);

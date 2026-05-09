@@ -9,6 +9,7 @@ class RoutePaths {
 
   static const admin = '/admin';
   static const adminUsers = '/admin/users';
+  static const adminPlayers = '/admin/players';
   static const adminMatches = '/admin/matches';
   static const adminTeams = '/admin/teams';
   static const adminReports = '/admin/reports';

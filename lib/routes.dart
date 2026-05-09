@@ -6,6 +6,7 @@ import 'route_paths.dart';
 import 'screens/admin/admin_dashboard_screen.dart';
 import 'screens/admin/admin_edit_profile_screen.dart';
 import 'screens/admin/admin_matches_screen.dart';
+import 'screens/admin/admin_players_screen.dart';
 import 'screens/admin/admin_profile_screen.dart';
 import 'screens/admin/admin_reports_screen.dart';
 import 'screens/admin/admin_settings_screen.dart';
@@ -32,6 +33,7 @@ class AppRoutes {
       case RoutePaths.home: page = const PlayerHomeScreen(); break;
       case RoutePaths.admin: page = const AdminDashboardScreen(); break;
       case RoutePaths.adminUsers: page = const AdminUsersScreen(); break;
+      case RoutePaths.adminPlayers: page = const AdminPlayersScreen(); break;
       case RoutePaths.adminMatches: page = const AdminMatchesScreen(); break;
       case RoutePaths.adminProfile: page = const AdminProfileScreen(); break;
       case RoutePaths.adminEditProfile: page = const AdminEditProfileScreen(); break;
