@@ -120,6 +120,34 @@ class PlayerStats {
   });
 }
 
+class PlayerStatsSnapshot {
+  final int matches;
+  final int runs;
+  final double average;
+  final double strikeRate;
+  final int wickets;
+  final double overallRating;
+  final double battingImpact;
+  final double consistency;
+  final double fielding;
+  final double sportsmanship;
+  final List<int> recentFormRuns;
+
+  const PlayerStatsSnapshot({
+    required this.matches,
+    required this.runs,
+    required this.average,
+    required this.strikeRate,
+    required this.wickets,
+    required this.overallRating,
+    required this.battingImpact,
+    required this.consistency,
+    required this.fielding,
+    required this.sportsmanship,
+    required this.recentFormRuns,
+  });
+}
+
 /// Player record used in the Rankings leaderboard.
 class PlayerRanking {
   final String name;

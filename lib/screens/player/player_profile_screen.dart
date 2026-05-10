@@ -5,92 +5,125 @@ import '../../theme/app_theme.dart';
 import '../../route_paths.dart';
 import '../../services/supabase_service.dart';
 
-class PlayerProfileScreen extends StatelessWidget {
+class PlayerProfileScreen extends StatefulWidget {
   const PlayerProfileScreen({super.key});
+
+  @override
+  State<PlayerProfileScreen> createState() => _PlayerProfileScreenState();
+}
+
+class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
+  late Future<Map<String, dynamic>> _profileFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _profileFuture = SupabaseService.fetchCurrentUserProfile();
+  }
 
   @override
   Widget build(BuildContext context) {
     final store = AppStore.of(context);
-    final name = store.userName.isEmpty ? 'Player' : store.userName;
-    final initials =
-        name.trim().split(' ').map((w) => w[0]).take(2).join().toUpperCase();
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _profileFuture,
+      builder: (context, snapshot) {
+        final profile = snapshot.data ?? const <String, dynamic>{};
+        final dbName = (profile['name'] as String?)?.trim() ?? '';
+        final name = dbName.isNotEmpty
+            ? dbName
+            : (store.userName.isEmpty ? 'Player' : store.userName);
+        final email =
+            ((profile['email'] as String?)?.trim().isNotEmpty ?? false)
+                ? (profile['email'] as String).trim()
+                : (SupabaseService.currentUser?.email ?? '—');
+        final phone = (profile['phone'] as String?)?.trim();
+        final role = (profile['playing_role'] as String?)?.trim();
+        final org = (profile['organization'] as String?)?.trim();
+        final initials = name
+            .trim()
+            .split(RegExp(r'\s+'))
+            .where((w) => w.isNotEmpty)
+            .map((w) => w[0])
+            .take(2)
+            .join()
+            .toUpperCase();
 
-    return Scaffold(
-      backgroundColor: C.bg,
-      body: CustomScrollView(
-        physics: const BouncingScrollPhysics(),
-        slivers: [
-          SliverToBoxAdapter(
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(20, 64, 20, 36),
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFF1B5E20), Color(0xFF388E3C)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-              ),
-              child: Column(children: [
-                Container(
-                  width: 96,
-                  height: 96,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF66BB6A), Color(0xFF2E7D32)],
+        return Scaffold(
+          backgroundColor: C.bg,
+          body: CustomScrollView(
+            physics: const BouncingScrollPhysics(),
+            slivers: [
+              SliverToBoxAdapter(
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(20, 64, 20, 36),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Color(0xFF1B5E20), Color(0xFF388E3C)],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
-                    border: Border.all(color: Colors.white38, width: 3),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withAlpha(60),
-                        blurRadius: 20,
-                        offset: const Offset(0, 6),
-                      ),
-                    ],
                   ),
-                  child: Center(
-                    child: Text(initials,
+                  child: Column(children: [
+                    Container(
+                      width: 96,
+                      height: 96,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF66BB6A), Color(0xFF2E7D32)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        border: Border.all(color: Colors.white38, width: 3),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withAlpha(60),
+                            blurRadius: 20,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
+                      ),
+                      child: Center(
+                        child: Text(initials,
+                            style: const TextStyle(
+                                color: C.white,
+                                fontSize: 32,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 1)),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(name,
                         style: const TextStyle(
                             color: C.white,
-                            fontSize: 32,
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1)),
-                  ),
+                            fontSize: 24,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.3)),
+                    const SizedBox(height: 6),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _statBadge('🏏', role?.isNotEmpty == true ? role! : 'Player'),
+                        const SizedBox(width: 10),
+                        Container(width: 1, height: 14, color: Colors.white30),
+                        const SizedBox(width: 10),
+                        _statBadge('📍', org?.isNotEmpty == true ? org! : 'Pakistan'),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _quickStat('Live', 'DB'),
+                        _quickStat(email == '—' ? '—' : 'Yes', 'Email'),
+                        _quickStat(role?.isNotEmpty == true ? 'Set' : '—', 'Role'),
+                        _quickStat(phone?.isNotEmpty == true ? 'Set' : '—', 'Phone'),
+                      ],
+                    ),
+                  ]),
                 ),
-                const SizedBox(height: 16),
-                Text(name,
-                    style: const TextStyle(
-                        color: C.white,
-                        fontSize: 24,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.3)),
-                const SizedBox(height: 6),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _statBadge('🏏', 'Batsman'),
-                    const SizedBox(width: 10),
-                    Container(width: 1, height: 14, color: Colors.white30),
-                    const SizedBox(width: 10),
-                    _statBadge('📍', 'Lahore'),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _quickStat('347', 'Runs'),
-                    _quickStat('12', 'Matches'),
-                    _quickStat('58.2', 'Avg'),
-                    _quickStat('2', 'Fifties'),
-                  ],
-                ),
-              ]),
-            ),
-          ),
+              ),
 
           SliverPadding(
             padding: const EdgeInsets.all(20),
@@ -98,14 +131,14 @@ class PlayerProfileScreen extends StatelessWidget {
               delegate: SliverChildListDelegate([
                 _section(context, 'Account', [
                   _tile(Icons.person_outline, 'Full Name', name),
-                  _tile(Icons.email_outlined, 'Email', 'player@gmail.com'),
-                  _tile(Icons.phone_outlined, 'Phone', '+92 300 0000000'),
+                  _tile(Icons.email_outlined, 'Email', email),
+                  _tile(Icons.phone_outlined, 'Phone', phone?.isNotEmpty == true ? phone! : 'Not set'),
                 ]),
                 const SizedBox(height: 16),
                 _section(context, 'Cricket Profile', [
-                  _tile(Icons.sports_cricket_outlined, 'Playing Role', 'Batsman'),
-                  _tile(Icons.emoji_events_outlined, 'Jersey No.', '#10'),
-                  _tile(Icons.location_on_outlined, 'City', 'Lahore, Pakistan'),
+                  _tile(Icons.sports_cricket_outlined, 'Playing Role', role?.isNotEmpty == true ? role! : 'Not set'),
+                  _tile(Icons.business_outlined, 'Organization', org?.isNotEmpty == true ? org! : 'Not set'),
+                  _tile(Icons.verified_user_outlined, 'Profile Source', 'Supabase'),
                 ]),
                 const SizedBox(height: 16),
 
@@ -165,7 +198,9 @@ class PlayerProfileScreen extends StatelessWidget {
             ),
           ),
         ],
-      ),
+          ),
+        );
+      },
     );
   }
 

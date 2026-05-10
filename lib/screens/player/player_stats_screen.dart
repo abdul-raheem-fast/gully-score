@@ -1,31 +1,26 @@
 import 'package:flutter/material.dart';
 import '../../models/player_models.dart';
-import '../../models/admin_models.dart';
 import '../../state/app_store.dart';
 import '../../theme/app_theme.dart';
 import '../../services/supabase_service.dart';
 import '../../route_paths.dart';
 
-/// Player analytics — layout aligned with the product reference (profile header,
-/// headline stats, performance ratings, recent form). Batting aggregates are
-/// illustrative until per-player scorecard data is available; match count is live.
-class PlayerStatsScreen extends StatelessWidget {
+/// Player analytics from database values only.
+class PlayerStatsScreen extends StatefulWidget {
   const PlayerStatsScreen({super.key});
 
-  static const _runs = 342;
-  static const _average = 42.7;
-  static const _strikeRate = 138.0;
+  @override
+  State<PlayerStatsScreen> createState() => _PlayerStatsScreenState();
+}
 
-  static const _overallRating = 8.4;
-  static const _ratingMetrics = <_RatingMetric>[
-    _RatingMetric('Batting Impact', 9.2, _RatingTone.greenDark),
-    _RatingMetric('Consistency', 7.8, _RatingTone.greenMid),
-    _RatingMetric('Fielding', 7.5, _RatingTone.orange),
-    _RatingMetric('Sportsmanship', 9.0, _RatingTone.greenMid),
-  ];
+class _PlayerStatsScreenState extends State<PlayerStatsScreen> {
+  late Future<PlayerStatsSnapshot> _statsFuture;
 
-  /// Reference-style last-six “runs” bars (visual only).
-  static const _recentFormValues = [12, 45, 72, 28, 56, 67];
+  @override
+  void initState() {
+    super.initState();
+    _statsFuture = SupabaseService.fetchCurrentPlayerStats();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -34,77 +29,116 @@ class PlayerStatsScreen extends StatelessWidget {
     final initials = _initials(name);
     final teamName = _primaryTeamName(store);
     final roleLine = _roleSubtitle();
-    final completedMatches =
-        store.matches.where((m) => m.status == MatchStatus.completed).length;
 
     return Scaffold(
       backgroundColor: C.bg,
-      body: CustomScrollView(
-        physics: const BouncingScrollPhysics(),
-        slivers: [
-          SliverToBoxAdapter(
-            child: SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    GestureDetector(
-                      onTap: () => Navigator.of(context).pushReplacementNamed(RoutePaths.home),
-                      child: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: C.white,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withAlpha(12),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
+      body: FutureBuilder<PlayerStatsSnapshot>(
+        future: _statsFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const Center(
+              child: CircularProgressIndicator(strokeWidth: 2.5, color: C.g2),
+            );
+          }
+          final stats = snapshot.data ??
+              const PlayerStatsSnapshot(
+                matches: 0,
+                runs: 0,
+                average: 0,
+                strikeRate: 0,
+                wickets: 0,
+                overallRating: 0,
+                battingImpact: 0,
+                consistency: 0,
+                fielding: 0,
+                sportsmanship: 0,
+                recentFormRuns: <int>[],
+              );
+          final ratingMetrics = <_RatingMetric>[
+            _RatingMetric(
+              'Batting Impact',
+              stats.battingImpact,
+              _RatingTone.greenDark,
+            ),
+            _RatingMetric('Consistency', stats.consistency, _RatingTone.greenMid),
+            _RatingMetric('Fielding', stats.fielding, _RatingTone.orange),
+            _RatingMetric(
+              'Sportsmanship',
+              stats.sportsmanship,
+              _RatingTone.greenMid,
+            ),
+          ];
+          final formValues =
+              stats.recentFormRuns.isEmpty ? const <int>[0] : stats.recentFormRuns;
+
+          return CustomScrollView(
+            physics: const BouncingScrollPhysics(),
+            slivers: [
+              SliverToBoxAdapter(
+                child: SafeArea(
+                  bottom: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        GestureDetector(
+                          onTap: () => Navigator.of(context).pushReplacementNamed(RoutePaths.home),
+                          child: Container(
+                            width: 40,
+                            height: 40,
+                            decoration: BoxDecoration(
+                              color: C.white,
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withAlpha(12),
+                                  blurRadius: 8,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
                             ),
-                          ],
+                            child: const Icon(
+                              Icons.arrow_back_ios_new_rounded,
+                              color: C.dark,
+                              size: 18,
+                            ),
+                          ),
                         ),
-                        child: const Icon(
-                          Icons.arrow_back_ios_new_rounded,
-                          color: C.dark,
-                          size: 18,
+                        const SizedBox(height: 12),
+                        _ProfileHeaderCard(
+                          initials: initials,
+                          name: name,
+                          roleLine: roleLine,
+                          teamName: teamName,
+                          runs: stats.runs,
+                          average: stats.average,
+                          strikeRate: stats.strikeRate,
+                          matches: stats.matches,
                         ),
-                      ),
+                      ],
                     ),
-                    const SizedBox(height: 12),
-                    _ProfileHeaderCard(
-                      initials: initials,
-                      name: name,
-                      roleLine: roleLine,
-                      teamName: teamName,
-                      runs: _runs,
-                      average: _average,
-                      strikeRate: _strikeRate,
-                      matches: completedMatches,
-                    ),
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ),
-          const SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
-              child: _PerformanceRatingCard(
-                overall: _overallRating,
-                metrics: _ratingMetrics,
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                  child: _PerformanceRatingCard(
+                    overall: stats.overallRating,
+                    metrics: ratingMetrics,
+                  ),
+                ),
               ),
-            ),
-          ),
-          const SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(16, 16, 16, 28),
-              child: _RecentFormCard(values: _recentFormValues),
-            ),
-          ),
-        ],
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+                  child: _RecentFormCard(values: formValues),
+                ),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -136,7 +170,7 @@ class PlayerStatsScreen extends StatelessWidget {
     if (role != null && role.isNotEmpty) {
       return '$role • Right Handed';
     }
-    return 'Batsman • Right Handed';
+    return 'Player • Right Handed';
   }
 }
 

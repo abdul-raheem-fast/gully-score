@@ -68,40 +68,12 @@ class _MyTeamsScreenState extends State<MyTeamsScreen>
     try {
       final teams = await SupabaseService.fetchTeamsCatalog();
       if (!mounted) return;
-      if (teams.isEmpty) {
-        // fallback to local seed
-        final store = AppStore.of(context);
-        setState(() {
-          _allTeams = store.teams
-              .map((t) => TeamInfo(
-                    id: t.id,
-                    name: t.name,
-                    abbreviation: t.abbreviation,
-                    captain: t.captain,
-                    playerCount: t.playerCount,
-                    matchCount: t.matchCount,
-                  ))
-              .toList();
-        });
-      } else {
-        setState(() => _allTeams = teams);
-      }
+      setState(() => _allTeams = teams);
     } catch (_) {
       if (!mounted) return;
-      final store = AppStore.of(context);
       setState(() {
-        _allTeams = store.teams
-            .map((t) => TeamInfo(
-                  id: t.id,
-                  name: t.name,
-                  abbreviation: t.abbreviation,
-                  captain: t.captain,
-                  playerCount: t.playerCount,
-                  matchCount: t.matchCount,
-                ))
-            .toList();
-        _teamsError =
-            _allTeams.isEmpty ? 'Could not load teams from server.' : null;
+        _allTeams = [];
+        _teamsError = 'Could not load teams from server.';
       });
     } finally {
       if (mounted) setState(() => _loadingTeams = false);
@@ -148,6 +120,17 @@ class _MyTeamsScreenState extends State<MyTeamsScreen>
 
   Future<void> _refreshMemberships() async {
     await AppStore.of(context).refreshMyMemberships();
+  }
+
+  Future<void> _openTeamSquadSheet(String teamName) async {
+    final squad = await SupabaseService.fetchTeamSquad(teamName);
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _TeamSquadSheet(teamName: teamName, squad: squad),
+    );
   }
 
   // ── Approve / Reject ─────────────────────────────────────────
@@ -305,8 +288,14 @@ class _MyTeamsScreenState extends State<MyTeamsScreen>
                     )
                   else ...[
                     ...approvedMemberships
-                        .map((m) => _MembershipCard(membership: m)),
-                    ...rosterOnly.map((n) => _RosterOnlyCard(teamName: n)),
+                        .map((m) => _MembershipCard(
+                              membership: m,
+                              onTap: () => _openTeamSquadSheet(m.teamName),
+                            )),
+                    ...rosterOnly.map((n) => _RosterOnlyCard(
+                          teamName: n,
+                          onTap: () => _openTeamSquadSheet(n),
+                        )),
                   ],
                   if (applications.isNotEmpty) ...[
                     const SizedBox(height: 24),
@@ -360,6 +349,7 @@ class _MyTeamsScreenState extends State<MyTeamsScreen>
                 await _loadAllTeams();
                 await _refreshMemberships();
               },
+              onTeamTap: (teamName) => _openTeamSquadSheet(teamName),
             ),
           ],
         ),
@@ -378,6 +368,7 @@ class _BrowseTab extends StatelessWidget {
   final ValueChanged<String> onSearchChanged;
   final Future<void> Function(TeamInfo) onApply;
   final Future<void> Function() onRefresh;
+  final void Function(String teamName) onTeamTap;
 
   const _BrowseTab({
     required this.allTeams,
@@ -388,6 +379,7 @@ class _BrowseTab extends StatelessWidget {
     required this.onSearchChanged,
     required this.onApply,
     required this.onRefresh,
+    required this.onTeamTap,
   });
 
   @override
@@ -449,6 +441,7 @@ class _BrowseTab extends StatelessWidget {
                         team: team,
                         alreadyApplied: applied,
                         onApply: applied ? null : () => onApply(team),
+                        onTap: () => onTeamTap(team.name),
                       ),
                     );
                   },
@@ -467,10 +460,12 @@ class _TeamCard extends StatefulWidget {
   final TeamInfo team;
   final bool alreadyApplied;
   final Future<void> Function()? onApply;
+  final VoidCallback onTap;
   const _TeamCard(
       {required this.team,
       required this.alreadyApplied,
-      required this.onApply});
+      required this.onApply,
+      required this.onTap});
 
   @override
   State<_TeamCard> createState() => _TeamCardState();
@@ -481,19 +476,22 @@ class _TeamCardState extends State<_TeamCard> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: C.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withAlpha(12),
-              blurRadius: 8,
-              offset: const Offset(0, 3))
-        ],
-      ),
-      padding: const EdgeInsets.all(16),
-      child: Row(children: [
+    return InkWell(
+      onTap: widget.onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        decoration: BoxDecoration(
+          color: C.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withAlpha(12),
+                blurRadius: 8,
+                offset: const Offset(0, 3))
+          ],
+        ),
+        padding: const EdgeInsets.all(16),
+        child: Row(children: [
         // Abbr badge
         Container(
           width: 52,
@@ -551,7 +549,8 @@ class _TeamCardState extends State<_TeamCard> {
               if (mounted) setState(() => _applying = false);
             },
           ),
-      ]),
+        ]),
+      ),
     );
   }
 }
@@ -559,7 +558,8 @@ class _TeamCardState extends State<_TeamCard> {
 // ── Membership card ──────────────────────────────────────────────
 class _MembershipCard extends StatelessWidget {
   final TeamMembership membership;
-  const _MembershipCard({required this.membership});
+  final VoidCallback? onTap;
+  const _MembershipCard({required this.membership, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -578,21 +578,24 @@ class _MembershipCard extends StatelessWidget {
             ? Icons.hourglass_top_rounded
             : Icons.cancel_outlined;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: C.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: statusColor.withAlpha(40)),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withAlpha(8),
-              blurRadius: 8,
-              offset: const Offset(0, 2))
-        ],
-      ),
-      padding: const EdgeInsets.all(14),
-      child: Row(children: [
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        decoration: BoxDecoration(
+          color: C.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: statusColor.withAlpha(40)),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withAlpha(8),
+                blurRadius: 8,
+                offset: const Offset(0, 2))
+          ],
+        ),
+        padding: const EdgeInsets.all(14),
+        child: Row(children: [
         Container(
           width: 44,
           height: 44,
@@ -630,7 +633,8 @@ class _MembershipCard extends StatelessWidget {
                   fontWeight: FontWeight.w600,
                   color: statusColor)),
         ]),
-      ]),
+        ]),
+      ),
     );
   }
 
@@ -640,27 +644,31 @@ class _MembershipCard extends StatelessWidget {
 /// Shown when the user's name is on `team_players` but there is no approved membership row.
 class _RosterOnlyCard extends StatelessWidget {
   final String teamName;
-  const _RosterOnlyCard({required this.teamName});
+  final VoidCallback? onTap;
+  const _RosterOnlyCard({required this.teamName, this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final abbr = _abbrFromTeamName(teamName);
     const color = Color(0xFF1565C0);
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: C.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withAlpha(40)),
-        boxShadow: [
-          BoxShadow(
-              color: Colors.black.withAlpha(8),
-              blurRadius: 8,
-              offset: const Offset(0, 2))
-        ],
-      ),
-      padding: const EdgeInsets.all(14),
-      child: Row(children: [
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        decoration: BoxDecoration(
+          color: C.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: color.withAlpha(40)),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withAlpha(8),
+                blurRadius: 8,
+                offset: const Offset(0, 2))
+          ],
+        ),
+        padding: const EdgeInsets.all(14),
+        child: Row(children: [
         Container(
           width: 44,
           height: 44,
@@ -691,7 +699,8 @@ class _RosterOnlyCard extends StatelessWidget {
           ]),
         ),
         Icon(Icons.list_alt_rounded, size: 18, color: Colors.blue.shade700),
-      ]),
+        ]),
+      ),
     );
   }
 }
@@ -985,4 +994,118 @@ class _ActionBtn extends StatelessWidget {
           ]),
         ),
       );
+}
+
+class _TeamSquadSheet extends StatelessWidget {
+  final String teamName;
+  final List<String> squad;
+  const _TeamSquadSheet({required this.teamName, required this.squad});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: MediaQuery.of(context).size.height * 0.72,
+      decoration: const BoxDecoration(
+        color: C.white,
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      child: Column(
+        children: [
+          const SizedBox(height: 10),
+          Container(
+            width: 42,
+            height: 4,
+            decoration: BoxDecoration(
+              color: C.hint,
+              borderRadius: BorderRadius.circular(99),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        teamName,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                          color: C.dark,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${squad.length} players',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: C.grey,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Expanded(
+            child: squad.isEmpty
+                ? const Center(
+                    child: Text(
+                      'No squad found for this team.',
+                      style: TextStyle(color: C.grey),
+                    ),
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+                    itemCount: squad.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 8),
+                    itemBuilder: (context, i) {
+                      final player = squad[i];
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF5F7F8),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 13,
+                              backgroundColor: C.g2.withAlpha(20),
+                              child: Text(
+                                '${i + 1}',
+                                style: const TextStyle(
+                                  color: C.g2,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                player,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: C.dark,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
 }

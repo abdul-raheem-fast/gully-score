@@ -157,6 +157,37 @@ class SupabaseService {
     return List<Map<String, dynamic>>.from(response);
   }
 
+  static Future<Map<String, dynamic>> fetchCurrentUserProfile() async {
+    final user = currentUser;
+    if (user == null) return {};
+    try {
+      final response = await client
+          .from('profiles')
+          .select()
+          .eq('id', user.id)
+          .limit(1);
+      final rows = List<Map<String, dynamic>>.from(response);
+      if (rows.isEmpty) {
+        return {
+          'name': getCurrentUserName() ?? '',
+          'email': user.email ?? '',
+          'playing_role': user.userMetadata?['playing_role']?.toString() ?? '',
+          'phone': '',
+          'organization': '',
+        };
+      }
+      return rows.first;
+    } catch (_) {
+      return {
+        'name': getCurrentUserName() ?? '',
+        'email': user.email ?? '',
+        'playing_role': user.userMetadata?['playing_role']?.toString() ?? '',
+        'phone': '',
+        'organization': '',
+      };
+    }
+  }
+
   static Future<List<Map<String, dynamic>>> fetchReports() async {
     final response = await client
         .from('reports')
@@ -632,6 +663,32 @@ class SupabaseService {
         if (t.isNotEmpty) out.add(t);
       }
       return out.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Ordered team squad from `team_players` with captain first.
+  static Future<List<String>> fetchTeamSquad(String teamName) async {
+    final normalized = teamName.trim();
+    if (normalized.isEmpty) return [];
+    try {
+      final response = await client
+          .from('team_players')
+          .select('player_name,is_captain,joined_at')
+          .eq('team_name', normalized)
+          .order('is_captain', ascending: false)
+          .order('joined_at', ascending: true);
+      final rows = List<Map<String, dynamic>>.from(response);
+      final seen = <String>{};
+      final out = <String>[];
+      for (final row in rows) {
+        final name = (row['player_name'] as String?)?.trim() ?? '';
+        if (name.isEmpty || seen.contains(name)) continue;
+        seen.add(name);
+        out.add(name);
+      }
+      return out;
     } catch (_) {
       return [];
     }
@@ -1374,5 +1431,156 @@ class SupabaseService {
         (wktsNorm * 0.15) +
         (matchesNorm * 0.20);
     return double.parse(raw.clamp(0.0, 10.0).toStringAsFixed(1));
+  }
+
+  /// Full player stats from database for the currently signed-in user.
+  static Future<PlayerStatsSnapshot> fetchCurrentPlayerStats() async {
+    final user = currentUser;
+    final userId = user?.id;
+    final fallback = const PlayerStatsSnapshot(
+      matches: 0,
+      runs: 0,
+      average: 0,
+      strikeRate: 0,
+      wickets: 0,
+      overallRating: 0,
+      battingImpact: 0,
+      consistency: 0,
+      fielding: 0,
+      sportsmanship: 0,
+      recentFormRuns: <int>[],
+    );
+    if (userId == null) return fallback;
+
+    final profileRows = await client
+        .from('profiles')
+        .select('name')
+        .eq('id', userId)
+        .limit(1);
+    final profileList = List<Map<String, dynamic>>.from(profileRows);
+    final playerName = (profileList.isNotEmpty
+            ? (profileList.first['name'] as String?)?.trim()
+            : null) ??
+        getCurrentUserName()?.trim() ??
+        '';
+    if (playerName.isEmpty) return fallback;
+
+    final rosterResp = await client
+        .from('players')
+        .select('match_id')
+        .eq('player_name', playerName);
+    final rosterRows = List<Map<String, dynamic>>.from(rosterResp);
+    final matchIds = <String>{};
+    for (final row in rosterRows) {
+      final matchId = row['match_id']?.toString().trim() ?? '';
+      if (matchId.isNotEmpty) matchIds.add(matchId);
+    }
+    final matches = matchIds.length;
+    if (matchIds.isEmpty) return fallback;
+
+    final inningsResp = await client
+        .from('innings')
+        .select('id,match_id,innings_no,is_completed')
+        .inFilter('match_id', matchIds.toList());
+    final inningsRows = List<Map<String, dynamic>>.from(inningsResp);
+    final inningsById = <String, Map<String, dynamic>>{};
+    for (final row in inningsRows) {
+      final id = row['id']?.toString() ?? '';
+      if (id.isNotEmpty) inningsById[id] = row;
+    }
+
+    final ballResp = inningsById.isEmpty
+        ? <Map<String, dynamic>>[]
+        : List<Map<String, dynamic>>.from(await client
+            .from('ball_events')
+            .select(
+                'innings_id,runs_off_bat,wicket_type,wicket_player_name,striker_name,bowler_name')
+            .inFilter('innings_id', inningsById.keys.toList()));
+
+    int totalRuns = 0;
+    int totalBalls = 0;
+    int dismissals = 0;
+    int wickets = 0;
+    final runsByMatch = <String, int>{};
+    final wicketsByMatch = <String, int>{};
+    final completedInningsByMatch = <String, int>{};
+
+    for (final row in inningsRows) {
+      final matchId = row['match_id']?.toString() ?? '';
+      final isCompleted = row['is_completed'] == true;
+      if (matchId.isNotEmpty && isCompleted) {
+        completedInningsByMatch[matchId] =
+            (completedInningsByMatch[matchId] ?? 0) + 1;
+      }
+    }
+
+    for (final e in ballResp) {
+      final inningsId = e['innings_id']?.toString() ?? '';
+      final innings = inningsById[inningsId];
+      final matchId = innings?['match_id']?.toString() ?? '';
+      final striker = (e['striker_name'] as String?)?.trim() ?? '';
+      final bowler = (e['bowler_name'] as String?)?.trim() ?? '';
+      final wicketType = (e['wicket_type'] as String?)?.trim() ?? '';
+      final wicketPlayer = (e['wicket_player_name'] as String?)?.trim() ?? '';
+      final runs = (e['runs_off_bat'] as num?)?.toInt() ?? 0;
+
+      if (striker == playerName) {
+        totalRuns += runs;
+        totalBalls += 1;
+        if (matchId.isNotEmpty) {
+          runsByMatch[matchId] = (runsByMatch[matchId] ?? 0) + runs;
+        }
+      }
+      if (wicketType.isNotEmpty && wicketPlayer == playerName) {
+        dismissals += 1;
+      }
+      if (bowler == playerName && wicketType.isNotEmpty) {
+        wickets += 1;
+        if (matchId.isNotEmpty) {
+          wicketsByMatch[matchId] = (wicketsByMatch[matchId] ?? 0) + 1;
+        }
+      }
+    }
+
+    final average = dismissals > 0 ? totalRuns / dismissals : totalRuns.toDouble();
+    final strikeRate = totalBalls > 0 ? (totalRuns / totalBalls) * 100 : 0.0;
+    final battingImpact = (strikeRate / 16).clamp(0.0, 10.0);
+    final consistency = matches > 0 ? (average / 6).clamp(0.0, 10.0) : 0.0;
+    final fielding = (5.0 + (wickets / (matches == 0 ? 1 : matches)))
+        .clamp(0.0, 10.0)
+        .toDouble();
+    final sportsmanship = matches > 0 ? 8.5 : 0.0;
+    final overall = ((battingImpact * 0.4) +
+            (consistency * 0.3) +
+            (fielding * 0.2) +
+            (sportsmanship * 0.1))
+        .clamp(0.0, 10.0);
+
+    final formEntries = runsByMatch.entries.toList()
+      ..sort((a, b) {
+        final ia = inningsRows
+            .where((r) => (r['match_id']?.toString() ?? '') == a.key)
+            .fold<int>(0, (s, r) => s + ((r['innings_no'] as num?)?.toInt() ?? 0));
+        final ib = inningsRows
+            .where((r) => (r['match_id']?.toString() ?? '') == b.key)
+            .fold<int>(0, (s, r) => s + ((r['innings_no'] as num?)?.toInt() ?? 0));
+        return ia.compareTo(ib);
+      });
+    final recentRuns =
+        formEntries.map((e) => e.value).toList().reversed.take(6).toList().reversed.toList();
+
+    return PlayerStatsSnapshot(
+      matches: matches,
+      runs: totalRuns,
+      average: double.parse(average.toStringAsFixed(1)),
+      strikeRate: double.parse(strikeRate.toStringAsFixed(1)),
+      wickets: wickets,
+      overallRating: double.parse(overall.toStringAsFixed(1)),
+      battingImpact: double.parse(battingImpact.toStringAsFixed(1)),
+      consistency: double.parse(consistency.toStringAsFixed(1)),
+      fielding: double.parse(fielding.toStringAsFixed(1)),
+      sportsmanship: double.parse(sportsmanship.toStringAsFixed(1)),
+      recentFormRuns: recentRuns,
+    );
   }
 }

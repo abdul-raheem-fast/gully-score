@@ -26,6 +26,12 @@ class _NewMatchScreenState extends State<NewMatchScreen> {
   String _striker = '', _nonStriker = '', _bowler = '';
   final _formats = ['T20','10-Over','ODI','Test'];
 
+  @override
+  void initState() {
+    super.initState();
+    _teamA.text = 'Peshawar Zalmi';
+  }
+
   void _next() => _pageCtrl.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
   void _prev() => _pageCtrl.previousPage(duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
 
@@ -253,6 +259,7 @@ class _NewMatchScreenState extends State<NewMatchScreen> {
 
   Widget _field(String label, TextEditingController ctrl, {IconData? icon, TextInputType? keyboard, List<TextInputFormatter>? formatters}) => TextField(
     controller: ctrl, keyboardType: keyboard, inputFormatters: formatters,
+    onChanged: (_) => setState(() {}),
     style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: C.dark),
     decoration: InputDecoration(labelText: label, prefixIcon: icon != null ? Icon(icon, color: C.g2, size: 20) : null, filled: true, fillColor: C.gLight, border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none), contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18)),
   );
