@@ -4,6 +4,7 @@ import '../../models/admin_models.dart';
 import '../../state/app_store.dart';
 import '../../theme/app_theme.dart';
 import '../../services/supabase_service.dart';
+import '../../route_paths.dart';
 
 /// Player analytics — layout aligned with the product reference (profile header,
 /// headline stats, performance ratings, recent form). Batting aggregates are
@@ -46,15 +47,44 @@ class PlayerStatsScreen extends StatelessWidget {
               bottom: false,
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                child: _ProfileHeaderCard(
-                  initials: initials,
-                  name: name,
-                  roleLine: roleLine,
-                  teamName: teamName,
-                  runs: _runs,
-                  average: _average,
-                  strikeRate: _strikeRate,
-                  matches: completedMatches,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    GestureDetector(
+                      onTap: () => Navigator.of(context).pushReplacementNamed(RoutePaths.home),
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: C.white,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withAlpha(12),
+                              blurRadius: 8,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.arrow_back_ios_new_rounded,
+                          color: C.dark,
+                          size: 18,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _ProfileHeaderCard(
+                      initials: initials,
+                      name: name,
+                      roleLine: roleLine,
+                      teamName: teamName,
+                      runs: _runs,
+                      average: _average,
+                      strikeRate: _strikeRate,
+                      matches: completedMatches,
+                    ),
+                  ],
                 ),
               ),
             ),

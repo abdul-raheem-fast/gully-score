@@ -3,6 +3,7 @@ import '../../models/player_models.dart';
 import '../../state/app_store.dart';
 import '../../theme/app_theme.dart';
 import '../../services/supabase_service.dart';
+import '../../route_paths.dart';
 
 class MyTeamsScreen extends StatefulWidget {
   const MyTeamsScreen({super.key});
@@ -224,7 +225,7 @@ class _MyTeamsScreenState extends State<MyTeamsScreen>
                     top: MediaQuery.of(context).padding.top + 8,
                     left: 16,
                     child: GestureDetector(
-                      onTap: () => Navigator.of(context).pop(),
+                      onTap: () => Navigator.of(context).pushReplacementNamed(RoutePaths.home),
                       child: Container(
                         width: 40,
                         height: 40,

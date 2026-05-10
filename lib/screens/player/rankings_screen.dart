@@ -4,6 +4,7 @@ import '../../models/player_models.dart';
 import '../../services/supabase_service.dart';
 import '../../state/app_store.dart';
 import '../../theme/app_theme.dart';
+import '../../route_paths.dart';
 
 enum _RankingCategory { runs, average, strikeRate, wickets, rating }
 
@@ -47,6 +48,10 @@ class _RankingsScreenState extends State<RankingsScreen> {
     }
   }
 
+  Future<void> _refresh() async {
+    await _load();
+  }
+
   @override
   Widget build(BuildContext context) {
     final store = AppStore.of(context);
@@ -56,9 +61,11 @@ class _RankingsScreenState extends State<RankingsScreen> {
 
     return Scaffold(
       backgroundColor: C.bg,
-      body: CustomScrollView(
-        physics: const BouncingScrollPhysics(),
-        slivers: [
+      body: RefreshIndicator(
+        onRefresh: _refresh,
+        child: CustomScrollView(
+          physics: const BouncingScrollPhysics(),
+          slivers: [
           // ── Header ─────────────────────────────────────────────
           SliverToBoxAdapter(
             child: SafeArea(
@@ -69,7 +76,7 @@ class _RankingsScreenState extends State<RankingsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     GestureDetector(
-                      onTap: () => Navigator.of(context).pop(),
+                      onTap: () => Navigator.of(context).pushReplacementNamed(RoutePaths.home),
                       child: Container(
                         width: 40,
                         height: 40,
@@ -116,11 +123,19 @@ class _RankingsScreenState extends State<RankingsScreen> {
 
           // ── Loading ──────────────────────────────────────────
           if (_isLoading)
-            const SliverToBoxAdapter(
+            SliverToBoxAdapter(
               child: Padding(
-                padding: EdgeInsets.only(top: 120),
-                child: Center(
-                  child: CircularProgressIndicator(color: C.g2),
+                padding: const EdgeInsets.only(top: 120),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const CircularProgressIndicator(color: C.g2),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Loading rankings...',
+                      style: TextStyle(color: C.grey, fontSize: 14),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -158,17 +173,29 @@ class _RankingsScreenState extends State<RankingsScreen> {
 
           // ── Empty ──────────────────────────────────────────────
           if (!_isLoading && _error == null && _players.isEmpty)
-            const SliverToBoxAdapter(
+            SliverToBoxAdapter(
               child: Padding(
-                padding: EdgeInsets.fromLTRB(24, 80, 24, 0),
+                padding: const EdgeInsets.fromLTRB(24, 80, 24, 0),
                 child: Column(
                   children: [
-                    Icon(Icons.people_outline, color: C.hint, size: 48),
-                    SizedBox(height: 12),
+                    const Icon(Icons.people_outline, color: C.hint, size: 48),
+                    const SizedBox(height: 12),
                     Text(
-                      'No players found.',
+                      'No player rankings available yet.',
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: C.grey, fontSize: 14),
+                      style: const TextStyle(color: C.grey, fontSize: 14),
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: _load,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: C.g2,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text('Refresh Rankings'),
                     ),
                   ],
                 ),
@@ -238,7 +265,8 @@ class _RankingsScreenState extends State<RankingsScreen> {
             ),
         ],
       ),
-    );
+    ),
+  );
   }
 
   List<PlayerRanking> _sortByCategory(

@@ -1193,135 +1193,99 @@ class SupabaseService {
 
   /// Aggregates real per-player stats from ball_events and rosters.
   static Future<List<PlayerRanking>> fetchPlayerRankings() async {
-    // 1. Profiles
-    final profilesResp = await client
-        .from('profiles')
-        .select('id,name,email')
-        .eq('role', 'player')
-        .order('name');
-    final profiles = List<Map<String, dynamic>>.from(profilesResp);
+    try {
+      // 1. Profiles
+      final profilesResp = await client
+          .from('profiles')
+          .select('id,name,email')
+          .eq('role', 'player')
+          .order('name');
+      final profiles = List<Map<String, dynamic>>.from(profilesResp);
 
-    // 2. Approved team memberships
-    final memResp = await client
-        .from('team_memberships')
-        .select('user_id,team_name,status')
-        .eq('status', 'approved');
-    final memberships = List<Map<String, dynamic>>.from(memResp);
+      // 2. Approved team memberships
+      final memResp = await client
+          .from('team_memberships')
+          .select('user_id,team_name,status')
+          .eq('status', 'approved');
+      final memberships = List<Map<String, dynamic>>.from(memResp);
 
-    // 3. Player roster (matches played)
-    final roster = await fetchAllPlayersRoster();
+      // 3. Player roster (matches played)
+      final roster = await fetchAllPlayersRoster();
 
-    // 4. Ball events for batting / bowling / dismissals
-    final ballEvents = await fetchAllBallEvents();
+      // 4. Ball events for batting / bowling / dismissals
+      final ballEvents = await fetchAllBallEvents();
 
-    // ── Build lookup maps ──
-    final teamByUserId = <String, String>{};
-    for (final row in memberships) {
-      final uid = row['user_id']?.toString() ?? '';
-      final tname = (row['team_name'] as String?)?.trim() ?? '';
-      if (uid.isNotEmpty && tname.isNotEmpty) teamByUserId[uid] = tname;
-    }
+      // ── Build lookup maps ──
+      final teamByUserId = <String, String>{};
+      for (final row in memberships) {
+        final uid = row['user_id']?.toString() ?? '';
+        final tname = (row['team_name'] as String?)?.trim() ?? '';
+        if (uid.isNotEmpty && tname.isNotEmpty) teamByUserId[uid] = tname;
+      }
 
-    final matchCountByName = <String, Set<String>>{};
-    final teamByName = <String, String>{};
-    for (final row in roster) {
-      final name = (row['player_name'] as String?)?.trim() ?? '';
-      final mid = (row['match_id'] as String?)?.trim() ?? '';
-      final tname = (row['team_name'] as String?)?.trim() ?? '';
-      if (name.isEmpty) continue;
-      if (mid.isNotEmpty) matchCountByName.putIfAbsent(name, () => <String>{}).add(mid);
-      if (tname.isNotEmpty) teamByName[name] = tname;
-    }
+      final matchCountByName = <String, Set<String>>{};
+      final teamByName = <String, String>{};
+      for (final row in roster) {
+        final name = (row['player_name'] as String?)?.trim() ?? '';
+        final mid = (row['match_id'] as String?)?.trim() ?? '';
+        final tname = (row['team_name'] as String?)?.trim() ?? '';
+        if (name.isEmpty) continue;
+        if (mid.isNotEmpty) matchCountByName.putIfAbsent(name, () => <String>{}).add(mid);
+        if (tname.isNotEmpty) teamByName[name] = tname;
+      }
 
-    // Batting aggregates
-    final runsByName = <String, int>{};
-    final ballsByName = <String, int>{};
-    for (final row in ballEvents) {
-      final striker = (row['striker_name'] as String?)?.trim() ?? '';
-      if (striker.isEmpty) continue;
-      final runs = (row['runs_off_bat'] as num?)?.toInt() ?? 0;
-      runsByName[striker] = (runsByName[striker] ?? 0) + runs;
-      ballsByName[striker] = (ballsByName[striker] ?? 0) + 1;
-    }
+      // Batting aggregates
+      final runsByName = <String, int>{};
+      final ballsByName = <String, int>{};
+      for (final row in ballEvents) {
+        final striker = (row['striker_name'] as String?)?.trim() ?? '';
+        if (striker.isEmpty) continue;
+        final runs = (row['runs_off_bat'] as num?)?.toInt() ?? 0;
+        runsByName[striker] = (runsByName[striker] ?? 0) + runs;
+        ballsByName[striker] = (ballsByName[striker] ?? 0) + 1;
+      }
 
-    // Bowling wickets
-    final wicketsByName = <String, int>{};
-    for (final row in ballEvents) {
-      final bowler = (row['bowler_name'] as String?)?.trim() ?? '';
-      final wtype = (row['wicket_type'] as String?)?.trim() ?? '';
-      if (bowler.isEmpty || wtype.isEmpty) continue;
-      wicketsByName[bowler] = (wicketsByName[bowler] ?? 0) + 1;
-    }
+      // Bowling wickets
+      final wicketsByName = <String, int>{};
+      for (final row in ballEvents) {
+        final bowler = (row['bowler_name'] as String?)?.trim() ?? '';
+        final wtype = (row['wicket_type'] as String?)?.trim() ?? '';
+        if (bowler.isEmpty || wtype.isEmpty) continue;
+        wicketsByName[bowler] = (wicketsByName[bowler] ?? 0) + 1;
+      }
 
-    // Dismissals
-    final dismissalsByName = <String, int>{};
-    for (final row in ballEvents) {
-      final wtype = (row['wicket_type'] as String?)?.trim() ?? '';
-      if (wtype.isEmpty) continue;
-      final victim = (row['wicket_player_name'] as String?)?.trim() ?? '';
-      if (victim.isEmpty) continue;
-      dismissalsByName[victim] = (dismissalsByName[victim] ?? 0) + 1;
-    }
+      // Dismissals
+      final dismissalsByName = <String, int>{};
+      for (final row in ballEvents) {
+        final wtype = (row['wicket_type'] as String?)?.trim() ?? '';
+        if (wtype.isEmpty) continue;
+        final victim = (row['wicket_player_name'] as String?)?.trim() ?? '';
+        if (victim.isEmpty) continue;
+        dismissalsByName[victim] = (dismissalsByName[victim] ?? 0) + 1;
+      }
 
-    // Build rankings from profiles
-    final rankings = <PlayerRanking>[];
-    for (final profile in profiles) {
-      final name = (profile['name'] as String?)?.trim() ?? '';
-      final id = profile['id']?.toString() ?? '';
-      if (name.isEmpty) continue;
+      // Build rankings from profiles
+      final rankings = <PlayerRanking>[];
+      for (final profile in profiles) {
+        final name = (profile['name'] as String?)?.trim() ?? '';
+        final id = profile['id']?.toString() ?? '';
+        if (name.isEmpty) continue;
 
-      final teamName = teamByUserId[id] ?? teamByName[name] ?? '—';
-      final matches = matchCountByName[name]?.length ?? 0;
-      final runs = runsByName[name] ?? 0;
-      final balls = ballsByName[name] ?? 0;
-      final wickets = wicketsByName[name] ?? 0;
-      final dismissals = dismissalsByName[name] ?? 0;
-
-      final average = dismissals > 0
-          ? double.parse((runs / dismissals).toStringAsFixed(1))
-          : (runs > 0 ? double.parse(runs.toStringAsFixed(1)) : 0.0);
-      final strikeRate = balls > 0
-          ? double.parse(((runs / balls) * 100).toStringAsFixed(1))
-          : 0.0;
-
-      // Simple rating 0-10 based on normalized contributions
-      final rating = _computeRating(
-        runs: runs,
-        average: average,
-        strikeRate: strikeRate,
-        wickets: wickets,
-        matches: matches,
-      );
-
-      rankings.add(PlayerRanking(
-        name: name,
-        initials: _initials(name),
-        teamName: teamName,
-        matches: matches,
-        runs: runs,
-        average: average,
-        strikeRate: strikeRate,
-        wickets: wickets,
-        rating: rating,
-      ));
-    }
-
-    // Fallback: if no profiles, build from roster names
-    if (rankings.isEmpty) {
-      for (final entry in teamByName.entries) {
-        final name = entry.key;
-        if (rankings.any((r) => r.name.toLowerCase() == name.toLowerCase())) continue;
+        final teamName = teamByUserId[id] ?? teamByName[name] ?? '—';
         final matches = matchCountByName[name]?.length ?? 0;
         final runs = runsByName[name] ?? 0;
         final balls = ballsByName[name] ?? 0;
         final wickets = wicketsByName[name] ?? 0;
         final dismissals = dismissalsByName[name] ?? 0;
+
         final average = dismissals > 0
             ? double.parse((runs / dismissals).toStringAsFixed(1))
-            : 0.0;
+            : (runs > 0 ? double.parse(runs.toStringAsFixed(1)) : 0.0);
         final strikeRate = balls > 0
             ? double.parse(((runs / balls) * 100).toStringAsFixed(1))
             : 0.0;
+
+        // Simple rating 0-10 based on normalized contributions
         final rating = _computeRating(
           runs: runs,
           average: average,
@@ -1329,10 +1293,11 @@ class SupabaseService {
           wickets: wickets,
           matches: matches,
         );
+
         rankings.add(PlayerRanking(
           name: name,
           initials: _initials(name),
-          teamName: entry.value,
+          teamName: teamName,
           matches: matches,
           runs: runs,
           average: average,
@@ -1341,9 +1306,52 @@ class SupabaseService {
           rating: rating,
         ));
       }
-    }
 
-    return rankings;
+      // Fallback: if no profiles, build from roster names
+      if (rankings.isEmpty) {
+        for (final entry in teamByName.entries) {
+          final name = entry.key;
+          if (rankings.any((r) => r.name.toLowerCase() == name.toLowerCase())) continue;
+          final matches = matchCountByName[name]?.length ?? 0;
+          final runs = runsByName[name] ?? 0;
+          final balls = ballsByName[name] ?? 0;
+          final wickets = wicketsByName[name] ?? 0;
+          final dismissals = dismissalsByName[name] ?? 0;
+          final average = dismissals > 0
+              ? double.parse((runs / dismissals).toStringAsFixed(1))
+              : 0.0;
+          final strikeRate = balls > 0
+              ? double.parse(((runs / balls) * 100).toStringAsFixed(1))
+              : 0.0;
+          final rating = _computeRating(
+            runs: runs,
+            average: average,
+            strikeRate: strikeRate,
+            wickets: wickets,
+            matches: matches,
+          );
+          rankings.add(PlayerRanking(
+            name: name,
+            initials: _initials(name),
+            teamName: entry.value,
+            matches: matches,
+            runs: runs,
+            average: average,
+            strikeRate: strikeRate,
+            wickets: wickets,
+            rating: rating,
+          ));
+        }
+      }
+
+      return rankings;
+    } catch (e, stackTrace) {
+      // Log the error for debugging
+      print('Error fetching player rankings: $e');
+      print('Stack trace: $stackTrace');
+      // Return empty list instead of throwing exception
+      return [];
+    }
   }
 
   static double _computeRating({
