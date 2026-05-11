@@ -12,6 +12,8 @@ dependencies:
   cupertino_icons: ^1.0.6
   supabase_flutter: ^2.10.3
   google_sign_in: ^6.2.1
+  pdf: ^3.10.10
+  printing: ^5.11.1
 
 dev_dependencies:
   flutter_test:

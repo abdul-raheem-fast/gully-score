@@ -29,7 +29,26 @@ class _NewMatchScreenState extends State<NewMatchScreen> {
   @override
   void initState() {
     super.initState();
-    _teamA.text = 'Peshawar Zalmi';
+    _loadInitialData();
+  }
+
+  Future<void> _loadInitialData() async {
+    final name = SupabaseService.getCurrentUserName();
+    if (name != null && name.isNotEmpty) {
+      setState(() {
+        _squadA[0].text = name;
+      });
+    }
+
+    // Try to load user's teams
+    final teams = await SupabaseService.fetchCaptainTeams();
+    if (teams.isNotEmpty) {
+      setState(() {
+        _teamA.text = teams.first;
+      });
+    } else {
+      _teamA.text = 'Peshawar Zalmi';
+    }
   }
 
   void _next() => _pageCtrl.nextPage(duration: const Duration(milliseconds: 300), curve: Curves.easeOut);

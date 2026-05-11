@@ -10,6 +10,9 @@ class Ball {
   final bool isWicket;
   final String? wicketType; // 'bowled', 'caught', 'run_out', 'stumped', 'lbw', 'hit_wicket'
   final String? wicketPlayerName;
+  final String? strikerName;
+  final String? nonStrikerName;
+  final String? bowlerName;
   final String? commentary;
 
   const Ball({
@@ -22,6 +25,9 @@ class Ball {
     this.isWicket = false,
     this.wicketType,
     this.wicketPlayerName,
+    this.strikerName,
+    this.nonStrikerName,
+    this.bowlerName,
     this.commentary,
   });
 
@@ -41,6 +47,9 @@ class Ball {
     bool? isWicket,
     String? wicketType,
     String? wicketPlayerName,
+    String? strikerName,
+    String? nonStrikerName,
+    String? bowlerName,
     String? commentary,
   }) {
     return Ball(
@@ -53,6 +62,9 @@ class Ball {
       isWicket: isWicket ?? this.isWicket,
       wicketType: wicketType ?? this.wicketType,
       wicketPlayerName: wicketPlayerName ?? this.wicketPlayerName,
+      strikerName: strikerName ?? this.strikerName,
+      nonStrikerName: nonStrikerName ?? this.nonStrikerName,
+      bowlerName: bowlerName ?? this.bowlerName,
       commentary: commentary ?? this.commentary,
     );
   }

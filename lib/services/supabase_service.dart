@@ -448,6 +448,9 @@ class SupabaseService {
       'runs_off_bat': ball.runsOffBat,
       'extra_runs': ball.extraRuns,
       'extra_type': ball.extraType,
+      'striker_name': ball.strikerName,
+      'non_striker_name': ball.nonStrikerName,
+      'bowler_name': ball.bowlerName,
       'wicket_type': ball.wicketType,
       'wicket_player_name': ball.wicketPlayerName,
       'commentary': ball.commentary,
@@ -1178,9 +1181,12 @@ class SupabaseService {
       runsOffBat: (row['runs_off_bat'] as num?)?.toInt() ?? 0,
       extraRuns: (row['extra_runs'] as num?)?.toInt() ?? 0,
       extraType: row['extra_type'] as String?,
-      isWicket: row['is_wicket'] == true,
+      isWicket: row['is_wicket'] == true || (row['wicket_type'] != null && (row['wicket_type'] as String).isNotEmpty),
       wicketType: row['wicket_type'] as String?,
       wicketPlayerName: row['wicket_player_name'] as String?,
+      strikerName: row['striker_name'] as String?,
+      nonStrikerName: row['non_striker_name'] as String?,
+      bowlerName: row['bowler_name'] as String?,
       commentary: row['commentary'] as String?,
     );
   }

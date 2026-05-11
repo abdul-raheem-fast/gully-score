@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import '../../models/admin_models.dart';
 import '../../models/scoring_models.dart';
 import '../../route_paths.dart';
 import '../../services/supabase_service.dart';
+import '../../services/pdf_service.dart';
 import '../../state/app_store.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/match_summary_widgets.dart';
 
 class LiveScoringScreen extends StatefulWidget {
   final ScoringSession session;
@@ -264,11 +267,28 @@ class _LiveScoringScreenState extends State<LiveScoringScreen> {
     final overNo = _inn.oversCompleted;
     final ballNo = _inn.ballsInCurrentOver + 1;
     final ballId = _inn.balls.length + 1;
-    final ball = Ball(id: ballId, overNo: overNo, ballNo: ballNo, runsOffBat: runs, extraRuns: extraRuns, extraType: extraType, isWicket: wicket, wicketType: wicketType, wicketPlayerName: wicketPlayer);
+    
+    final striker = _inn.currentStriker;
+    final nonStriker = _inn.currentNonStriker;
+    final bowler = _inn.currentBowler;
+
+    final ball = Ball(
+      id: ballId, 
+      overNo: overNo, 
+      ballNo: ballNo, 
+      runsOffBat: runs, 
+      extraRuns: extraRuns, 
+      extraType: extraType, 
+      isWicket: wicket, 
+      wicketType: wicketType, 
+      wicketPlayerName: wicketPlayer,
+      strikerName: striker?.name,
+      nonStrikerName: nonStriker?.name,
+      bowlerName: bowler?.name,
+    );
+
     setState(() {
       _inn.balls.add(ball);
-      final striker = _inn.currentStriker;
-      final bowler = _inn.currentBowler;
       if (striker != null) {
         striker.runs += runs;
         striker.ballsFaced += ball.isLegal ? 1 : 0;
@@ -514,181 +534,293 @@ class _MatchResultScreen extends StatelessWidget {
     final inn1 = session.innings1;
     final inn2 = session.innings2;
     final result = session.result ?? 'Match Complete';
+    final innings = [if (inn1 != null) inn1, if (inn2 != null) inn2];
+    final motm = MatchSummaryWidgets.calculateManOfTheMatch(innings);
 
     return Scaffold(
       backgroundColor: C.bg,
-      body: CustomScrollView(
-        physics: const BouncingScrollPhysics(),
-        slivers: [
-          // ── Trophy Banner ────────────────────────────────────
-          SliverToBoxAdapter(
-            child: Container(
+      appBar: AppBar(
+        backgroundColor: const Color(0xFF1A5C20),
+        foregroundColor: Colors.white,
+        elevation: 0,
+        title: const Text('Match Result', style: TextStyle(fontWeight: FontWeight.w800)),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.picture_as_pdf_rounded),
+            onPressed: () => _downloadPdf(context),
+            tooltip: 'Download Scorecard PDF',
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
+      body: DefaultTabController(
+        length: 2,
+        child: Column(
+          children: [
+            Container(
               width: double.infinity,
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Color(0xFF1A5C20), Color(0xFF2E7D32)],
-                  begin: Alignment.topLeft, end: Alignment.bottomRight,
-                ),
-              ),
-              child: SafeArea(
-                bottom: false,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
-                  child: Column(children: [
-                    Container(
-                      width: 80, height: 80,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withAlpha(30),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.emoji_events, color: Color(0xFFFFD700), size: 48),
-                    ),
-                    const SizedBox(height: 16),
-                    const Text('MATCH RESULT', style: TextStyle(color: Colors.white60, fontSize: 12, fontWeight: FontWeight.w700, letterSpacing: 2)),
-                    const SizedBox(height: 8),
-                    Text(result, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)),
-                    const SizedBox(height: 16),
-                    // Score summary
-                    Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              color: const Color(0xFF1A5C20),
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+              child: Column(
+                children: [
+                  Text(
+                    result,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900),
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
                       _teamScore(session.setup.teamA,
                           '${inn1?.totalRuns ?? 0}/${inn1?.totalWickets ?? 0}',
-                          '${inn1?.oversText ?? "0.0"} ov'),
+                          '${inn1?.oversText ?? "0.0"} ov', true),
                       const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 16),
+                        padding: EdgeInsets.symmetric(horizontal: 24),
                         child: Text('vs', style: TextStyle(color: Colors.white54, fontSize: 14)),
                       ),
                       _teamScore(session.setup.teamB,
                           '${inn2?.totalRuns ?? 0}/${inn2?.totalWickets ?? 0}',
-                          '${inn2?.oversText ?? "0.0"} ov'),
-                    ]),
-                  ]),
-                ),
+                          '${inn2?.oversText ?? "0.0"} ov', false),
+                    ],
+                  ),
+                ],
               ),
             ),
-          ),
-
-          // ── Innings 1 Scorecard ───────────────────────────────
-          if (inn1 != null) ..._inningsSliver('1st Innings — ${inn1.battingTeam}', inn1),
-
-          // ── Innings 2 Scorecard ───────────────────────────────
-          if (inn2 != null) ..._inningsSliver('2nd Innings — ${inn2.battingTeam}', inn2),
-
-          // ── Done button ───────────────────────────────────────
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+            const TabBar(
+              labelColor: C.g1,
+              unselectedLabelColor: C.grey,
+              indicatorColor: C.g1,
+              indicatorSize: TabBarIndicatorSize.tab,
+              labelStyle: TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+              tabs: [
+                Tab(text: 'SUMMARY'),
+                Tab(text: 'SCORECARD'),
+              ],
+            ),
+            Expanded(
+              child: TabBarView(
+                children: [
+                  _buildSummaryTab(motm, innings),
+                  _buildScorecardTab(innings),
+                ],
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
               child: ElevatedButton.icon(
                 onPressed: () => onDone(),
                 icon: const Icon(Icons.home_rounded),
-                label: const Text('Back to Home', style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15)),
+                label: const Text('Back to Home', style: TextStyle(fontWeight: FontWeight.w800)),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: C.g2, foregroundColor: Colors.white,
+                  backgroundColor: C.g2,
+                  foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                   minimumSize: const Size(double.infinity, 0),
                 ),
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSummaryTab(PlayerInMatch motm, List<InningsState> innings) {
+    return ListView(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      children: [
+        if (motm.name != 'N/A') MatchSummaryWidgets.manOfTheMatch(motm),
+        ...innings.map((inn) => _summaryInningsCard(inn)),
+      ],
+    );
+  }
+
+  Widget _summaryInningsCard(InningsState inn) {
+    final topBat = (List<PlayerInMatch>.from(inn.batsmen)..sort((a, b) => b.runs.compareTo(a.runs))).take(2).toList();
+    final topBowl = (List<PlayerInMatch>.from(inn.bowlers)..sort((a, b) => b.wicketsTaken.compareTo(a.wicketsTaken))).take(1).toList();
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: C.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [BoxShadow(color: Colors.black.withAlpha(8), blurRadius: 8, offset: const Offset(0, 2))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(inn.battingTeam, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, color: C.dark)),
+              Text('${inn.totalRuns}/${inn.totalWickets} (${inn.oversText})', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: C.dark)),
+            ],
           ),
+          const Divider(height: 24),
+          ...topBat.map((p) => Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: [
+                Expanded(child: Text(p.name, style: const TextStyle(fontSize: 13, color: C.dark))),
+                Text('${p.runs}(${p.ballsFaced})', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: C.dark)),
+              ],
+            ),
+          )),
+          if (topBowl.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Expanded(child: Text(topBowl[0].name, style: const TextStyle(fontSize: 13, color: C.grey))),
+                Text('${topBowl[0].wicketsTaken}/${topBowl[0].runsConceded}', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: C.grey)),
+              ],
+            ),
+          ],
         ],
       ),
     );
   }
 
-  Widget _teamScore(String team, String score, String overs) {
-    return Column(children: [
-      Text(_abbr(team), style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600)),
-      const SizedBox(height: 4),
-      Text(score, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900)),
-      Text(overs, style: const TextStyle(color: Colors.white54, fontSize: 11)),
-    ]);
+  Widget _buildScorecardTab(List<InningsState> innings) {
+    return ListView(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      children: [
+        for (var inn in innings) ..._detailedInningsSection(inn),
+      ],
+    );
   }
 
-  List<Widget> _inningsSliver(String title, InningsState inn) {
-    final batted = inn.batsmen.where((p) => p.ballsFaced > 0 || p.isOut).toList();
-    final bowled = inn.bowlers.where((p) => p.ballsBowled > 0 || p.oversBowled > 0).toList();
+  List<Widget> _detailedInningsSection(InningsState inn) {
     return [
-      SliverToBoxAdapter(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
-          child: Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: C.dark)),
-        ),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+        child: Text('${inn.inningsNo == 1 ? "1st" : "2nd"} Innings — ${inn.battingTeam}', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: C.dark)),
       ),
-      // Batting table
-      SliverToBoxAdapter(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
-          child: Container(
-            decoration: BoxDecoration(color: C.white, borderRadius: BorderRadius.circular(16)),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                child: Row(children: [
-                  const Expanded(child: Text('BATTER', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: C.grey))),
-                  _hdr('R'), _hdr('B'), _hdr('4s'), _hdr('6s'), _hdr('SR'),
-                ]),
-              ),
-              const Divider(height: 1),
-              ...batted.map((p) => Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Row(children: [
-                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(p.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: C.dark)),
-                    if (p.isOut) Text(p.dismissal ?? 'out', style: const TextStyle(fontSize: 10, color: C.grey)),
-                  ])),
-                  _cell('${p.runs}', bold: true),
-                  _cell('${p.ballsFaced}'),
-                  _cell('${p.fours}'),
-                  _cell('${p.sixes}'),
-                  _cell(p.strikeRate.toStringAsFixed(1)),
-                ]),
-              )),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-                child: Text('Total: ${inn.totalRuns}/${inn.totalWickets}  (${inn.oversText} ov)',
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: C.dark)),
-              ),
-            ]),
-          ),
-        ),
-      ),
-      // Bowling table
-      if (bowled.isNotEmpty) SliverToBoxAdapter(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
-          child: Container(
-            decoration: BoxDecoration(color: C.white, borderRadius: BorderRadius.circular(16)),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                child: Row(children: [
-                  const Expanded(child: Text('BOWLER', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: C.grey))),
-                  _hdr('O'), _hdr('R'), _hdr('W'), _hdr('Econ'),
-                ]),
-              ),
-              const Divider(height: 1),
-              ...bowled.map((p) => Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                child: Row(children: [
-                  Expanded(child: Text(p.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: C.dark))),
-                  _cell(p.oversText),
-                  _cell('${p.runsConceded}'),
-                  _cell('${p.wicketsTaken}', bold: true),
-                  _cell(p.economy.toStringAsFixed(1)),
-                ]),
-              )),
-              const SizedBox(height: 8),
-            ]),
-          ),
+      Container(
+        margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        decoration: BoxDecoration(color: C.white, borderRadius: BorderRadius.circular(16)),
+        child: Column(
+          children: [
+            _tableHeader(['BATTER', 'R', 'B', '4s', '6s', 'SR']),
+            ...inn.batsmen.where((p) => p.ballsFaced > 0 || p.isOut).map((p) => _batterRow(p)),
+            const Divider(height: 1),
+            _tableHeader(['BOWLER', 'O', 'R', 'W', 'Econ']),
+            ...inn.bowlers.where((p) => p.ballsBowled > 0 || p.oversBowled > 0).map((p) => _bowlerRow(p)),
+            const SizedBox(height: 12),
+          ],
         ),
       ),
     ];
   }
 
-  Widget _hdr(String t) => SizedBox(width: 36, child: Text(t, textAlign: TextAlign.center, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: C.grey)));
-  Widget _cell(String t, {bool bold = false}) => SizedBox(width: 36, child: Text(t, textAlign: TextAlign.center, style: TextStyle(fontSize: 12, fontWeight: bold ? FontWeight.w800 : FontWeight.w500, color: C.dark)));
+  Widget _tableHeader(List<String> cols) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      child: Row(
+        children: [
+          Expanded(child: Text(cols[0], style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: C.grey))),
+          for (var i = 1; i < cols.length; i++)
+            SizedBox(width: 40, child: Text(cols[i], textAlign: TextAlign.center, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: C.grey))),
+        ],
+      ),
+    );
+  }
+
+  Widget _batterRow(PlayerInMatch p) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(p.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: C.dark)),
+                if (p.isOut) Text(p.dismissal ?? 'out', style: const TextStyle(fontSize: 10, color: C.grey)),
+              ],
+            ),
+          ),
+          _cell('${p.runs}', bold: true),
+          _cell('${p.ballsFaced}'),
+          _cell('${p.fours}'),
+          _cell('${p.sixes}'),
+          _cell(p.strikeRate.toStringAsFixed(1)),
+        ],
+      ),
+    );
+  }
+
+  Widget _bowlerRow(PlayerInMatch p) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      child: Row(
+        children: [
+          Expanded(child: Text(p.name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: C.dark))),
+          _cell(p.oversText),
+          _cell('${p.runsConceded}'),
+          _cell('${p.wicketsTaken}', bold: true),
+          _cell(p.economy.toStringAsFixed(1)),
+        ],
+      ),
+    );
+  }
+
+  Widget _cell(String txt, {bool bold = false}) {
+    return SizedBox(
+      width: 40,
+      child: Text(
+        txt,
+        textAlign: TextAlign.center,
+        style: TextStyle(fontSize: 12, fontWeight: bold ? FontWeight.w900 : FontWeight.w600, color: C.dark),
+      ),
+    );
+  }
+
+  Widget _teamScore(String team, String score, String overs, bool isLeft) {
+    return Column(
+      crossAxisAlignment: isLeft ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      children: [
+        Text(_abbr(team), style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 4),
+        Text(score, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w900)),
+        Text(overs, style: const TextStyle(color: Colors.white54, fontSize: 11)),
+      ],
+    );
+  }
+
   String _abbr(String team) {
     final w = team.split(' ').where((e) => e.isNotEmpty).take(2).map((e) => e[0].toUpperCase()).join();
     return w.length >= 2 ? w : team.trim().toUpperCase().substring(0, team.length.clamp(0, 2));
+  }
+
+  void _downloadPdf(BuildContext context) async {
+    final inn1 = session.innings1;
+    final inn2 = session.innings2;
+    final innings = [if (inn1 != null) inn1, if (inn2 != null) inn2];
+    final motm = MatchSummaryWidgets.calculateManOfTheMatch(innings);
+    
+    final match = AdminMatch(
+      id: session.setup.id,
+      teamA: session.setup.teamA,
+      teamB: session.setup.teamB,
+      scoreA: '${inn1?.totalRuns ?? 0}/${inn1?.totalWickets ?? 0}',
+      scoreB: '${inn2?.totalRuns ?? 0}/${inn2?.totalWickets ?? 0}',
+      venue: session.setup.venue,
+      date: session.setup.date,
+      status: MatchStatus.completed,
+      result: session.result,
+      overs: session.setup.overs,
+    );
+
+    try {
+      await PdfService.generateAndPrintScorecard(match, innings, motm);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error generating PDF: $e'), backgroundColor: Colors.red),
+      );
+    }
   }
 }
