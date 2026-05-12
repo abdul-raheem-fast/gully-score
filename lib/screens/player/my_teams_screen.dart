@@ -177,179 +177,197 @@ class _MyTeamsScreenState extends State<MyTeamsScreen>
 
     return Scaffold(
       backgroundColor: C.bg,
-      body: NestedScrollView(
-        headerSliverBuilder: (ctx, _) => [
-          SliverAppBar(
-            pinned: true,
-            backgroundColor: const Color(0xFF1B5E20),
-            foregroundColor: Colors.white,
-            automaticallyImplyLeading: false,
-            expandedHeight: 130,
-            flexibleSpace: FlexibleSpaceBar(
-              titlePadding: const EdgeInsets.fromLTRB(20, 0, 20, 56),
-              title: const Text('My Teams',
-                  style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 22,
-                      color: Colors.white)),
-              background: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Container(
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [Color(0xFF1B5E20), Color(0xFF388E3C)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    top: MediaQuery.of(context).padding.top + 8,
-                    left: 16,
-                    child: GestureDetector(
-                      onTap: () => Navigator.of(context).pushReplacementNamed(RoutePaths.home),
-                      child: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withAlpha(12),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            // ── Header: Back Button ──────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: GestureDetector(
+                  onTap: () => Navigator.of(context).pushReplacementNamed(RoutePaths.home),
+                  child: Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: C.white,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withAlpha(12),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
                         ),
-                        child: const Icon(
-                          Icons.arrow_back_ios_new_rounded,
-                          color: C.dark,
-                          size: 18,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            bottom: TabBar(
-              controller: _tabCtrl,
-              indicatorColor: Colors.white,
-              indicatorWeight: 3,
-              labelColor: Colors.white,
-              unselectedLabelColor: Colors.white60,
-              labelStyle:
-                  const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-              tabs: [
-                Tab(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text('My teams'),
-                      if (myTeamsTabBadge > 0) ...[
-                        const SizedBox(width: 6),
-                        _Badge(myTeamsTabBadge.toString(), Colors.white),
                       ],
-                    ],
+                    ),
+                    child: const Icon(
+                      Icons.arrow_back_ios_new_rounded,
+                      color: C.dark,
+                      size: 18,
+                    ),
                   ),
                 ),
-                const Tab(text: 'Discover & apply'),
-              ],
+              ),
             ),
-          ),
-        ],
-        body: TabBarView(
-          controller: _tabCtrl,
-          children: [
-            // ── Tab 1: My teams (DB memberships + roster + captain) ──
-            RefreshIndicator(
-              color: C.g2,
-              onRefresh: () async {
-                await _refreshMemberships();
-                await _loadRosterTeams();
-                await _loadCaptainData();
-              },
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  const _SectionHeader('Your teams'),
-                  const SizedBox(height: 8),
-                  if (store.isLoadingMemberships || _loadingRoster)
-                    const _Loader()
-                  else if (approvedMemberships.isEmpty && rosterOnly.isEmpty)
-                    _EmptyHint(
-                      icon: Icons.groups_2_outlined,
-                      label: applications.any((m) =>
-                              m.status == MembershipStatus.pending)
-                          ? 'No approved memberships yet. Pending applications are below.'
-                          : 'You are not on a team yet. Open Discover & apply to join one.',
-                    )
-                  else ...[
-                    ...approvedMemberships
-                        .map((m) => _MembershipCard(
-                              membership: m,
-                              onTap: () => _openTeamSquadSheet(m.teamName),
-                            )),
-                    ...rosterOnly.map((n) => _RosterOnlyCard(
-                          teamName: n,
-                          onTap: () => _openTeamSquadSheet(n),
-                        )),
+            const SizedBox(height: 12),
+
+            // ── Header: Title Card ───────────────────────────────
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: _HeaderCard(count: myTeamsTabBadge),
+            ),
+            const SizedBox(height: 20),
+
+            // ── Tab Bar ──────────────────────────────────────────
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE8ECEF),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: TabBar(
+                controller: _tabCtrl,
+                dividerColor: Colors.transparent,
+                indicatorSize: TabBarIndicatorSize.tab,
+                indicator: BoxDecoration(
+                  color: C.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withAlpha(10),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
                   ],
-                  if (applications.isNotEmpty) ...[
-                    const SizedBox(height: 24),
-                    const _SectionHeader('Applications'),
-                    const SizedBox(height: 8),
-                    ...applications.map((m) => _MembershipCard(membership: m)),
-                  ],
-                  const SizedBox(height: 24),
-                  if (_isCaptain) ...[
-                    const _SectionHeader('Captain — pending requests'),
-                    const SizedBox(height: 8),
-                    if (_loadingRequests)
-                      const _Loader()
-                    else if (_pendingRequests.isEmpty)
-                      const _EmptyHint(
-                        icon: Icons.inbox_outlined,
-                        label: 'No pending join requests for your team(s).',
-                      )
-                    else
-                      ..._pendingRequests.map((r) => _RequestCard(
-                            request: r,
-                            onApprove: () =>
-                                _updateRequest(r['id'].toString(), 'approved'),
-                            onReject: () =>
-                                _updateRequest(r['id'].toString(), 'rejected'),
-                          )),
-                  ],
+                ),
+                labelColor: C.g1,
+                unselectedLabelColor: C.grey,
+                labelStyle: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 13,
+                ),
+                unselectedLabelStyle: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+                tabs: [
+                  Tab(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Text('My Teams'),
+                        if (myTeamsTabBadge > 0) ...[
+                          const SizedBox(width: 6),
+                          _Badge(myTeamsTabBadge.toString(), C.g1),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const Tab(text: 'Discover'),
                 ],
               ),
             ),
+            const SizedBox(height: 8),
 
-            // ── Tab 2: Discover & apply ──
-            _BrowseTab(
-              allTeams: _allTeams,
-              memberships: memberships,
-              loading: _loadingTeams,
-              error: _teamsError,
-              search: _search,
-              onSearchChanged: (v) => setState(() => _search = v),
-              onApply: (team) async {
-                final messenger = ScaffoldMessenger.of(context);
-                await store.applyToTeam(team);
-                if (!mounted) return;
-                messenger.showSnackBar(_snack(
-                  'Applied to ${team.name}! Waiting for captain approval.',
-                  C.g2,
-                ));
-                setState(() {});
-              },
-              onRefresh: () async {
-                await _loadAllTeams();
-                await _refreshMemberships();
-              },
-              onTeamTap: (teamName) => _openTeamSquadSheet(teamName),
+            // ── Tab Content ──────────────────────────────────────
+            Expanded(
+              child: TabBarView(
+                controller: _tabCtrl,
+                children: [
+                  // ── Tab 1: My Teams ──
+                  RefreshIndicator(
+                    color: C.g2,
+                    onRefresh: () async {
+                      await _refreshMemberships();
+                      await _loadRosterTeams();
+                      await _loadCaptainData();
+                    },
+                    child: ListView(
+                      physics: const BouncingScrollPhysics(),
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                      children: [
+                        const _SectionHeader('Your teams'),
+                        const SizedBox(height: 10),
+                        if (store.isLoadingMemberships || _loadingRoster)
+                          const _Loader()
+                        else if (approvedMemberships.isEmpty && rosterOnly.isEmpty)
+                          _EmptyHint(
+                            icon: Icons.groups_2_outlined,
+                            label: applications.any((m) =>
+                                    m.status == MembershipStatus.pending)
+                                ? 'No approved memberships yet. Pending applications are below.'
+                                : 'You are not on a team yet. Open Discover to join one.',
+                          )
+                        else ...[
+                          ...approvedMemberships
+                              .map((m) => _MembershipCard(
+                                    membership: m,
+                                    onTap: () => _openTeamSquadSheet(m.teamName),
+                                  )),
+                          ...rosterOnly.map((n) => _RosterOnlyCard(
+                                teamName: n,
+                                onTap: () => _openTeamSquadSheet(n),
+                              )),
+                        ],
+                        if (applications.isNotEmpty) ...[
+                          const SizedBox(height: 24),
+                          const _SectionHeader('Applications'),
+                          const SizedBox(height: 10),
+                          ...applications.map((m) => _MembershipCard(membership: m)),
+                        ],
+                        const SizedBox(height: 24),
+                        if (_isCaptain) ...[
+                          const _SectionHeader('Captain — pending requests'),
+                          const SizedBox(height: 10),
+                          if (_loadingRequests)
+                            const _Loader()
+                          else if (_pendingRequests.isEmpty)
+                            const _EmptyHint(
+                              icon: Icons.inbox_outlined,
+                              label: 'No pending join requests for your team(s).',
+                            )
+                          else
+                            ..._pendingRequests.map((r) => _RequestCard(
+                                  request: r,
+                                  onApprove: () =>
+                                      _updateRequest(r['id'].toString(), 'approved'),
+                                  onReject: () =>
+                                      _updateRequest(r['id'].toString(), 'rejected'),
+                                )),
+                        ],
+                      ],
+                    ),
+                  ),
+
+                  // ── Tab 2: Discover ──
+                  _BrowseTab(
+                    allTeams: _allTeams,
+                    memberships: memberships,
+                    loading: _loadingTeams,
+                    error: _teamsError,
+                    search: _search,
+                    onSearchChanged: (v) => setState(() => _search = v),
+                    onApply: (team) async {
+                      final messenger = ScaffoldMessenger.of(context);
+                      await store.applyToTeam(team);
+                      if (!mounted) return;
+                      messenger.showSnackBar(_snack(
+                        'Applied to ${team.name}! Waiting for captain approval.',
+                        C.g2,
+                      ));
+                      setState(() {});
+                    },
+                    onRefresh: () async {
+                      await _loadAllTeams();
+                      await _refreshMemberships();
+                    },
+                    onTeamTap: (teamName) => _openTeamSquadSheet(teamName),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
@@ -825,6 +843,88 @@ class _RequestCardState extends State<_RequestCard> {
   }
 
   String _fmtDate(DateTime d) => '${d.day}/${d.month}/${d.year}';
+}
+
+class _HeaderCard extends StatelessWidget {
+  final int count;
+  const _HeaderCard({required this.count});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(20, 22, 20, 20),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF1B5E20), Color(0xFF388E3C)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF1B5E20).withAlpha(70),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: Colors.white.withAlpha(30),
+                  shape: BoxShape.circle,
+                ),
+                child: const Center(
+                  child: Icon(
+                    Icons.groups_outlined,
+                    color: Colors.white,
+                    size: 24,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'My Teams',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      count == 0 
+                        ? 'No teams yet' 
+                        : count == 1 
+                          ? '1 team joined' 
+                          : '$count teams joined',
+                      style: TextStyle(
+                        color: Colors.white.withAlpha(200),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 // ── Small reusable widgets ───────────────────────────────────────
