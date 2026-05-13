@@ -702,7 +702,7 @@ class SupabaseService {
     required String name,
     required String abbreviation,
     required String captainName,
-    required List<String> playerNames,
+    required List<TeamPlayerDetail> roster,
   }) async {
     final userId = currentUser?.id;
     if (userId == null) throw Exception('Not authenticated');
@@ -710,25 +710,10 @@ class SupabaseService {
     final teamName = name.trim();
     if (teamName.isEmpty) throw Exception('Team name required');
 
-    final cap = captainName.trim();
-    final seen = <String>{};
-    final roster = <String>[];
-
-    void addPlayer(String raw) {
-      final p = raw.trim();
-      if (p.isEmpty || seen.contains(p)) return;
-      seen.add(p);
-      roster.add(p);
-    }
-
-    if (cap.isNotEmpty) addPlayer(cap);
-    for (final p in playerNames) {
-      addPlayer(p);
-    }
-
     if (roster.isEmpty) throw Exception('Add at least one player');
 
-    final captainResolved = cap.isNotEmpty ? cap : roster.first;
+    final cap = captainName.trim();
+    final captainResolved = cap.isNotEmpty ? cap : roster.first.name;
 
     await client.from('teams').insert({
       'name': teamName,
@@ -742,16 +727,17 @@ class SupabaseService {
           .map(
             (p) => {
               'team_name': teamName,
-              'player_name': p,
-              'is_captain': p == captainResolved,
+              'player_name': p.name,
+              'role': p.role,
+              'is_captain': p.name == captainResolved,
             },
           )
           .toList(),
     );
   }
 
-  /// Apply for membership in [teamName]. Stores a row in `team_memberships`.
-  /// Uses insert first; if a row already exists (conflict) it updates instead.
+  /// Apply for membership in [teamName]. Stores a row in `team_memberships`
+  /// and fires a join_request notification to the team captain.
   static Future<void> applyToTeam({
     required String teamName,
     required String teamAbbreviation,
@@ -759,16 +745,22 @@ class SupabaseService {
     final userId = currentUser?.id;
     if (userId == null) throw Exception('Not authenticated');
 
+    final playerName = getCurrentUserName()?.trim() ?? 'Unknown Player';
     final now = DateTime.now().toIso8601String();
+    String? membershipId;
+
     try {
       // Try a plain insert first.
-      await client.from('team_memberships').insert({
+      final inserted = await client.from('team_memberships').insert({
         'user_id': userId,
         'team_name': teamName,
         'team_abbreviation': teamAbbreviation,
+        'player_name': playerName,
         'status': 'pending',
         'applied_at': now,
-      });
+      }).select('id');
+      final rows = List<Map<String, dynamic>>.from(inserted);
+      membershipId = rows.isNotEmpty ? rows.first['id']?.toString() : null;
     } catch (e) {
       // If it's a unique-violation (code 23505), update the existing row.
       final msg = e.toString();
@@ -777,14 +769,51 @@ class SupabaseService {
             .from('team_memberships')
             .update({
               'team_abbreviation': teamAbbreviation,
+              'player_name': playerName,
               'status': 'pending',
               'applied_at': now,
             })
             .eq('user_id', userId)
             .eq('team_name', teamName);
+        // fetch the row id for notification linking
+        try {
+          final rows = await client
+              .from('team_memberships')
+              .select('id')
+              .eq('user_id', userId)
+              .eq('team_name', teamName)
+              .limit(1);
+          final r = List<Map<String, dynamic>>.from(rows);
+          membershipId = r.isNotEmpty ? r.first['id']?.toString() : null;
+        } catch (_) {}
       } else {
         rethrow;
       }
+    }
+
+    // Send notification to the captain of this team.
+    try {
+      final captainRows = await client
+          .from('teams')
+          .select('captain_user_id')
+          .eq('name', teamName)
+          .limit(1);
+      final cRows = List<Map<String, dynamic>>.from(captainRows);
+      if (cRows.isNotEmpty) {
+        final captainId = cRows.first['captain_user_id']?.toString();
+        if (captainId != null && captainId.isNotEmpty) {
+          await client.from('notifications').insert({
+            'recipient_id': captainId,
+            'sender_id': userId,
+            'type': 'join_request',
+            'team_name': teamName,
+            'player_name': playerName,
+            if (membershipId != null) 'membership_id': membershipId,
+          });
+        }
+      }
+    } catch (_) {
+      // Notification failure must not block the apply action.
     }
   }
 
@@ -807,6 +836,9 @@ class SupabaseService {
           break;
         case 'rejected':
           status = MembershipStatus.rejected;
+          break;
+        case 'invited':
+          status = MembershipStatus.invited;
           break;
         default:
           status = MembershipStatus.pending;
@@ -839,6 +871,9 @@ class SupabaseService {
           break;
         case 'rejected':
           status = MembershipStatus.rejected;
+          break;
+        case 'invited':
+          status = MembershipStatus.invited;
           break;
         default:
           status = MembershipStatus.pending;
@@ -928,7 +963,7 @@ class SupabaseService {
     return enriched;
   }
 
-  /// Approve or reject a membership request.
+  /// Approve or reject a membership request and notify the applicant.
   static Future<void> updateMembershipStatus({
     required String id,
     required String status, // 'approved' | 'rejected'
@@ -940,6 +975,181 @@ class SupabaseService {
           'updated_at': DateTime.now().toIso8601String(),
         })
         .eq('id', id);
+
+    // Send a notification to the applicant.
+    try {
+      final rows = await client
+          .from('team_memberships')
+          .select('user_id, team_name, player_name')
+          .eq('id', id)
+          .limit(1);
+      final r = List<Map<String, dynamic>>.from(rows);
+      if (r.isNotEmpty) {
+        final applicantId = r.first['user_id']?.toString() ?? '';
+        final teamName = r.first['team_name']?.toString() ?? '';
+        final playerName = r.first['player_name']?.toString() ?? '';
+        final captainId = currentUser?.id ?? '';
+        if (applicantId.isNotEmpty) {
+          await client.from('notifications').insert({
+            'recipient_id': applicantId,
+            'sender_id': captainId.isNotEmpty ? captainId : null,
+            'type': status == 'approved' ? 'request_approved' : 'request_rejected',
+            'team_name': teamName,
+            'player_name': playerName,
+            'membership_id': id,
+          });
+        }
+      }
+    } catch (_) {
+      // Notification failure must not block the status update.
+    }
+  }
+
+  // ── Notifications ────────────────────────────────────────────────
+
+  /// Fetch all notifications for the current user, newest first.
+  static Future<List<Map<String, dynamic>>> fetchMyNotifications() async {
+    final userId = currentUser?.id;
+    if (userId == null) return [];
+    try {
+      final response = await client
+          .from('notifications')
+          .select()
+          .eq('recipient_id', userId)
+          .order('created_at', ascending: false)
+          .limit(50);
+      return List<Map<String, dynamic>>.from(response);
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Count unread notifications for the current user.
+  static Future<int> fetchUnreadNotificationCount() async {
+    final userId = currentUser?.id;
+    if (userId == null) return 0;
+    try {
+      final response = await client
+          .from('notifications')
+          .select('id')
+          .eq('recipient_id', userId)
+          .eq('is_read', false);
+      return List<Map<String, dynamic>>.from(response).length;
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  /// Mark a single notification as read.
+  static Future<void> markNotificationRead(String notificationId) async {
+    try {
+      await client
+          .from('notifications')
+          .update({'is_read': true})
+          .eq('id', notificationId);
+    } catch (_) {}
+  }
+
+  /// Mark all notifications for the current user as read.
+  static Future<void> markAllNotificationsRead() async {
+    final userId = currentUser?.id;
+    if (userId == null) return;
+    try {
+      await client
+          .from('notifications')
+          .update({'is_read': true})
+          .eq('recipient_id', userId)
+          .eq('is_read', false);
+    } catch (_) {}
+  }
+
+  /// Check if the current user is already an approved member of ANY team.
+  static Future<String?> checkIfUserInTeam() async {
+    final userId = currentUser?.id;
+    if (userId == null) return null;
+    try {
+      final response = await client
+          .from('team_memberships')
+          .select('team_name')
+          .eq('user_id', userId)
+          .eq('status', 'approved')
+          .limit(1);
+      final rows = List<Map<String, dynamic>>.from(response);
+      return rows.isNotEmpty ? rows.first['team_name']?.toString() : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Fetch all profiles that are not approved members of any team.
+  static Future<List<Map<String, dynamic>>> fetchTeamlessPlayers() async {
+    try {
+      final response = await client.rpc('get_teamless_players');
+      return List<Map<String, dynamic>>.from(response);
+    } catch (_) {
+      // Fallback if RPC fails: just fetch all profiles
+      final resp = await client.from('profiles').select();
+      return List<Map<String, dynamic>>.from(resp);
+    }
+  }
+
+  /// Captain invites a player to join their team.
+  static Future<void> invitePlayerToTeam({
+    required String teamName,
+    required String teamAbbreviation,
+    required String targetUserId,
+    required String targetPlayerName,
+  }) async {
+    final userId = currentUser?.id;
+    if (userId == null) throw Exception('Not authenticated');
+
+    final now = DateTime.now().toIso8601String();
+    
+    // 1. Create/Update membership with 'invited' status
+    final inserted = await client.from('team_memberships').upsert({
+      'user_id': targetUserId,
+      'team_name': teamName,
+      'team_abbreviation': teamAbbreviation,
+      'player_name': targetPlayerName,
+      'status': 'invited',
+      'applied_at': now,
+    }, onConflict: 'user_id, team_name').select('id');
+    
+    final rows = List<Map<String, dynamic>>.from(inserted);
+    final membershipId = rows.isNotEmpty ? rows.first['id']?.toString() : null;
+
+    // 2. Send notification to the player
+    final captainName = getCurrentUserName() ?? 'A Captain';
+    await client.from('notifications').insert({
+      'recipient_id': targetUserId,
+      'sender_id': userId,
+      'type': 'team_invitation', 
+      'team_name': teamName,
+      'player_name': captainName,
+      if (membershipId != null) 'membership_id': membershipId,
+    });
+  }
+
+  /// Fetch a team's saved roster (names + roles).
+  static Future<List<TeamPlayerDetail>> fetchTeamRoster(String teamName) async {
+    try {
+      final response = await client.rpc('get_team_roster', params: {'t_name': teamName});
+      final rows = List<Map<String, dynamic>>.from(response);
+      return rows.map((r) => TeamPlayerDetail(
+        name: r['player_name']?.toString() ?? '',
+        role: r['role']?.toString() ?? 'Batsman',
+        isCaptain: r['is_captain'] == true,
+      )).toList();
+    } catch (_) {
+      // Fallback: direct query
+      final response = await client.from('team_players').select().eq('team_name', teamName);
+      final rows = List<Map<String, dynamic>>.from(response);
+      return rows.map((r) => TeamPlayerDetail(
+        name: r['player_name']?.toString() ?? '',
+        role: r['role']?.toString() ?? 'Batsman',
+        isCaptain: r['is_captain'] == true,
+      )).toList();
+    }
   }
 
   static Future<void> addPlayer({

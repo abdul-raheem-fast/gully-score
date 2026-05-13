@@ -31,6 +31,7 @@ class _MyTeamsScreenState extends State<MyTeamsScreen>
   bool _loadingRequests = true;
   bool _isCaptain = false;
 
+  int _unreadCount = 0;
   bool _membershipsBootstrapped = false;
 
   @override
@@ -40,6 +41,7 @@ class _MyTeamsScreenState extends State<MyTeamsScreen>
     _loadAllTeams();
     _loadCaptainData();
     _loadRosterTeams();
+    _loadUnreadCount();
   }
 
   @override
@@ -118,6 +120,12 @@ class _MyTeamsScreenState extends State<MyTeamsScreen>
     }
   }
 
+  Future<void> _loadUnreadCount() async {
+    final count = await SupabaseService.fetchUnreadNotificationCount();
+    if (!mounted) return;
+    setState(() => _unreadCount = count);
+  }
+
   Future<void> _refreshMemberships() async {
     await AppStore.of(context).refreshMyMemberships();
   }
@@ -177,38 +185,103 @@ class _MyTeamsScreenState extends State<MyTeamsScreen>
 
     return Scaffold(
       backgroundColor: C.bg,
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () async {
+          final created = await Navigator.pushNamed(context, RoutePaths.createTeam);
+          if (created == true) {
+            _loadCaptainData();
+            _refreshMemberships();
+            _loadAllTeams();
+          }
+        },
+        backgroundColor: C.g2,
+        foregroundColor: Colors.white,
+        elevation: 4,
+        icon: const Icon(Icons.add_rounded),
+        label: const Text('Create Team',
+            style: TextStyle(fontWeight: FontWeight.w800, letterSpacing: 0.2)),
+      ),
       body: SafeArea(
         bottom: false,
         child: Column(
           children: [
-            // ── Header: Back Button ──────────────────────────────
+            // ── Header: Back Button + Notifications ─────────────
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: GestureDetector(
-                  onTap: () => Navigator.of(context).pushReplacementNamed(RoutePaths.home),
-                  child: Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: C.white,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withAlpha(12),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.arrow_back_ios_new_rounded,
-                      color: C.dark,
-                      size: 18,
+              child: Row(
+                children: [
+                  GestureDetector(
+                    onTap: () => Navigator.of(context).pop(),
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: C.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withAlpha(12),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.arrow_back_ios_new_rounded,
+                        color: C.dark,
+                        size: 18,
+                      ),
                     ),
                   ),
-                ),
+                  const Spacer(),
+                  // Notification bell with badge
+                  GestureDetector(
+                    onTap: () async {
+                      await Navigator.pushNamed(context, RoutePaths.notifications);
+                      if (!mounted) return;
+                      _loadUnreadCount();
+                      _loadCaptainData();
+                      await _refreshMemberships();
+                    },
+                    child: Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: C.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withAlpha(12),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          const Center(
+                            child: Icon(Icons.notifications_outlined,
+                                color: C.dark, size: 20),
+                          ),
+                          if (_unreadCount > 0)
+                            Positioned(
+                              top: 8,
+                              right: 8,
+                              child: Container(
+                                width: 8,
+                                height: 8,
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFFE53935),
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 12),

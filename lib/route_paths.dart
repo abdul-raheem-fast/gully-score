@@ -26,4 +26,7 @@ class RoutePaths {
   static const matchScorecard = '/player/match-scorecard';
   static const aiChat = '/player/ai-chat';
   static const rankings = '/player/rankings';
+  static const myTeams = '/player/my-teams';
+  static const notifications = '/player/notifications';
+  static const createTeam = '/player/create-team';
 }

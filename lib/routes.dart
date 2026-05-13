@@ -22,6 +22,9 @@ import 'screens/player/live_scoring_screen.dart';
 import 'screens/player/match_scorecard_screen.dart';
 import 'screens/player/ai_chat_screen.dart';
 import 'screens/player/rankings_screen.dart';
+import 'screens/player/my_teams_screen.dart';
+import 'screens/player/notifications_screen.dart';
+import 'screens/player/create_team_screen.dart';
 
 /// Central app route definitions.
 class AppRoutes {
@@ -93,6 +96,15 @@ class AppRoutes {
         break;
       case RoutePaths.rankings:
         page = const RankingsScreen();
+        break;
+      case RoutePaths.myTeams:
+        page = const MyTeamsScreen();
+        break;
+      case RoutePaths.notifications:
+        page = const NotificationsScreen();
+        break;
+      case RoutePaths.createTeam:
+        page = const CreateTeamScreen();
         break;
       case RoutePaths.liveScoring:
         final args = settings.arguments as ScoringSession?;

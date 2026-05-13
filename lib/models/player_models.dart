@@ -2,7 +2,7 @@
 
 enum MatchResult { won, lost, draw }
 
-enum MembershipStatus { pending, approved, rejected }
+enum MembershipStatus { pending, approved, rejected, invited }
 
 /// Lightweight team record used in the player "My Teams" view.
 class TeamInfo {
@@ -39,6 +39,18 @@ class TeamMembership {
     required this.teamAbbreviation,
     required this.status,
     required this.appliedAt,
+  });
+}
+
+class TeamPlayerDetail {
+  final String name;
+  final String role;
+  final bool isCaptain;
+
+  const TeamPlayerDetail({
+    required this.name,
+    required this.role,
+    this.isCaptain = false,
   });
 }
 

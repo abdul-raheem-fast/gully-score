@@ -5,6 +5,7 @@ import '../../route_paths.dart';
 import '../../services/supabase_service.dart';
 import '../../state/app_store.dart';
 import '../../theme/app_theme.dart';
+import '../../models/player_models.dart';
 
 class NewMatchScreen extends StatefulWidget {
   const NewMatchScreen({super.key});
@@ -25,6 +26,10 @@ class _NewMatchScreenState extends State<NewMatchScreen> {
   String _tossWinner = '', _electedTo = 'bat';
   String _striker = '', _nonStriker = '', _bowler = '';
   final _formats = ['T20','10-Over','ODI','Test'];
+  
+  List<String> _captainTeams = [];
+  final Map<String, List<TeamPlayerDetail>> _rosters = {};
+  bool _loadingRoster = false;
 
   @override
   void initState() {
@@ -40,14 +45,46 @@ class _NewMatchScreenState extends State<NewMatchScreen> {
       });
     }
 
-    // Try to load user's teams
-    final teams = await SupabaseService.fetchCaptainTeams();
-    if (teams.isNotEmpty) {
-      setState(() {
-        _teamA.text = teams.first;
-      });
-    } else {
-      _teamA.text = 'Peshawar Zalmi';
+    try {
+      final teams = await SupabaseService.fetchCaptainTeams();
+      if (mounted) {
+        setState(() {
+          _captainTeams = teams;
+          if (teams.isNotEmpty) {
+            _teamA.text = teams.first;
+          }
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _loadRoster(String teamName, List<TextEditingController> squad) async {
+    if (teamName.isEmpty) return;
+    setState(() => _loadingRoster = true);
+    try {
+      final roster = await SupabaseService.fetchTeamRoster(teamName);
+      if (mounted && roster.isNotEmpty) {
+        setState(() {
+          // Clear existing
+          for (final c in squad) {
+            c.dispose();
+          }
+          squad.clear();
+          // Add from roster
+          for (final p in roster) {
+            squad.add(TextEditingController(text: p.name));
+          }
+          _rosters[teamName] = roster;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to load roster. Check your connection.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loadingRoster = false);
     }
   }
 
@@ -73,12 +110,25 @@ class _NewMatchScreenState extends State<NewMatchScreen> {
       teamAPlayers: _uniqueNames(_squadA.map((c) => c.text.trim()).toList()),
       teamBPlayers: _uniqueNames(_squadB.map((c) => c.text.trim()).toList()),
     );
+    PlayerInMatch makePlayer(String name, String teamName) {
+      final roster = _rosters[teamName];
+      String role = 'Batsman';
+      if (roster != null) {
+        try {
+          role = roster.firstWhere((p) => p.name == name).role;
+        } catch (_) {}
+      }
+      return PlayerInMatch(name: name, role: role);
+    }
+
     final batTeam = setup.battingFirst;
     final bowlTeam = setup.bowlingFirst;
     final batSquad = batTeam == setup.teamA ? setup.teamAPlayers : setup.teamBPlayers;
     final bowlSquad = bowlTeam == setup.teamA ? setup.teamAPlayers : setup.teamBPlayers;
-    final batsmen = batSquad.map((n) => PlayerInMatch(name: n)).toList();
-    final bowlers = bowlSquad.map((n) => PlayerInMatch(name: n)).toList();
+    
+    final batsmen = batSquad.map((n) => makePlayer(n, batTeam)).toList();
+    final bowlers = bowlSquad.map((n) => makePlayer(n, bowlTeam)).toList();
+    
     for (final p in batsmen) { if (p.name == _striker || p.name == _nonStriker) p.isBatting = true; }
     for (final p in bowlers) { if (p.name == _bowler) p.isBowling = true; }
     final innings = InningsState(inningsNo: 1, battingTeam: batTeam, bowlingTeam: bowlTeam, batsmen: batsmen, bowlers: bowlers, targetOvers: setup.overs);
@@ -197,8 +247,30 @@ class _NewMatchScreenState extends State<NewMatchScreen> {
         if (squad.length > 1) IconButton(onPressed: () { squad[i].dispose(); refresh(() => squad.removeAt(i)); }, icon: const Icon(Icons.remove_circle_outline, color: Colors.red)),
       ]))),
       const SizedBox(height: 8),
-      OutlinedButton.icon(onPressed: () => refresh(() => squad.add(TextEditingController())), icon: const Icon(Icons.add, color: C.g2), label: const Text('Add Player', style: TextStyle(color: C.g2, fontWeight: FontWeight.w700)),
-        style: OutlinedButton.styleFrom(side: const BorderSide(color: C.g2), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12)),
+      Row(
+        children: [
+          OutlinedButton.icon(
+            onPressed: () => refresh(() => squad.add(TextEditingController())),
+            icon: const Icon(Icons.add, color: C.g2, size: 18),
+            label: const Text('Add Player', style: TextStyle(color: C.g2, fontWeight: FontWeight.w700, fontSize: 13)),
+            style: OutlinedButton.styleFrom(side: const BorderSide(color: C.g2), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)), padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12)),
+          ),
+          if (_captainTeams.contains(team)) ...[
+            const SizedBox(width: 12),
+            TextButton.icon(
+              onPressed: _loadingRoster ? null : () => _loadRoster(team, squad),
+              icon: _loadingRoster 
+                ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: C.g2))
+                : const Icon(Icons.sync_rounded, color: C.g2, size: 18),
+              label: const Text('Load Saved Roster', style: TextStyle(color: C.g2, fontWeight: FontWeight.w700, fontSize: 13)),
+              style: TextButton.styleFrom(
+                backgroundColor: C.g2.withAlpha(15),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
+            ),
+          ],
+        ],
       ),
       const SizedBox(height: 28), _navButtons(),
     ]));

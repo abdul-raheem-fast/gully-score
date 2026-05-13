@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/supabase_service.dart';
 import '../../theme/app_theme.dart';
+import '../../models/player_models.dart';
 
 class CreateTeamScreen extends StatefulWidget {
   const CreateTeamScreen({super.key});
@@ -9,14 +10,80 @@ class CreateTeamScreen extends StatefulWidget {
   State<CreateTeamScreen> createState() => _CreateTeamScreenState();
 }
 
+class _PlayerRow {
+  final nameCtrl = TextEditingController();
+  String role = 'Batsman';
+  void dispose() => nameCtrl.dispose();
+}
+
 class _CreateTeamScreenState extends State<CreateTeamScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
   final _abbrCtrl = TextEditingController();
-  final List<TextEditingController> _playerCtrls = [TextEditingController()];
+  final List<_PlayerRow> _playerRows = [_PlayerRow()];
 
   bool _creating = false;
   String? _error;
+  String? _existingTeam;
+  List<Map<String, dynamic>> _availablePlayers = [];
+  bool _loadingPlayers = false;
+  final Set<String> _invitedUserIds = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _checkExistingTeam();
+  }
+
+  Future<void> _checkExistingTeam() async {
+    final teamName = await SupabaseService.checkIfUserInTeam();
+    if (!mounted) return;
+    if (teamName != null) {
+      setState(() => _existingTeam = teamName);
+      _showConfirmDialog(teamName);
+    }
+    _loadAvailablePlayers();
+  }
+
+  Future<void> _loadAvailablePlayers() async {
+    setState(() => _loadingPlayers = true);
+    try {
+      final players = await SupabaseService.fetchTeamlessPlayers();
+      if (!mounted) return;
+      setState(() => _availablePlayers = players);
+    } catch (_) {}
+    if (mounted) setState(() => _loadingPlayers = false);
+  }
+
+  void _showConfirmDialog(String teamName) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Already in a Team',
+            style: TextStyle(fontWeight: FontWeight.w800)),
+        content: Text(
+            'You are currently a member of "$teamName". Creating a new team will not remove you from your current team, but you will become the Captain of this new team. Continue?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Go Back', style: TextStyle(color: C.grey)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: C.g2,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text('Yes, Create New'),
+          ),
+        ],
+      ),
+    );
+  }
 
   // Auto-derive abbreviation from team name
   void _onNameChanged(String val) {
@@ -32,13 +99,13 @@ class _CreateTeamScreenState extends State<CreateTeamScreen> {
   }
 
   void _addPlayerField() {
-    setState(() => _playerCtrls.add(TextEditingController()));
+    setState(() => _playerRows.add(_PlayerRow()));
   }
 
   void _removePlayerField(int index) {
     setState(() {
-      _playerCtrls[index].dispose();
-      _playerCtrls.removeAt(index);
+      _playerRows[index].dispose();
+      _playerRows.removeAt(index);
     });
   }
 
@@ -52,17 +119,38 @@ class _CreateTeamScreenState extends State<CreateTeamScreen> {
       final captainName = SupabaseService.getCurrentUserName() ??
           SupabaseService.currentUser?.email ??
           'Captain';
-      final players = _playerCtrls
-          .map((c) => c.text.trim())
-          .where((p) => p.isNotEmpty)
+      
+      final roster = _playerRows
+          .where((r) => r.nameCtrl.text.trim().isNotEmpty)
+          .map((r) => TeamPlayerDetail(
+                name: r.nameCtrl.text.trim(),
+                role: r.role,
+              ))
           .toList();
+
+      // Add captain to roster if not already there
+      if (!roster.any((p) => p.name == captainName)) {
+        roster.insert(0, TeamPlayerDetail(name: captainName, role: 'All-rounder', isCaptain: true));
+      }
 
       await SupabaseService.createTeam(
         name: _nameCtrl.text.trim(),
         abbreviation: _abbrCtrl.text.trim(),
         captainName: captainName,
-        playerNames: players,
+        roster: roster,
       );
+
+      // Send invitations to selected players
+      for (final pId in _invitedUserIds) {
+        final p = _availablePlayers.firstWhere((pl) => pl['id'] == pId);
+        await SupabaseService.invitePlayerToTeam(
+          teamName: _nameCtrl.text.trim(),
+          teamAbbreviation: _abbrCtrl.text.trim(),
+          targetUserId: pId,
+          targetPlayerName: p['name']?.toString() ?? 'Player',
+        );
+      }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -81,7 +169,11 @@ class _CreateTeamScreenState extends State<CreateTeamScreen> {
         setState(() {
           if (msg.contains('duplicate') || msg.contains('23505') ||
               msg.contains('unique')) {
-            _error = 'A team with this name already exists.';
+            if (msg.contains('team_players_player_name_key')) {
+              _error = 'One or more players already belong to another team.';
+            } else {
+              _error = 'A team with this name already exists.';
+            }
           } else if (msg.contains('relation') || msg.contains('does not exist') ||
               msg.contains('42P01')) {
             _error =
@@ -105,8 +197,8 @@ class _CreateTeamScreenState extends State<CreateTeamScreen> {
   void dispose() {
     _nameCtrl.dispose();
     _abbrCtrl.dispose();
-    for (final c in _playerCtrls) {
-      c.dispose();
+    for (final r in _playerRows) {
+      r.dispose();
     }
     super.dispose();
   }
@@ -273,24 +365,54 @@ class _CreateTeamScreenState extends State<CreateTeamScreen> {
                           ]),
                           const SizedBox(height: 4),
                           const Text(
-                            'Add your team members by name. More players can apply and join later.',
+                            'Add your team members and assign their roles.',
                             style: TextStyle(fontSize: 12, color: C.grey),
                           ),
                           const SizedBox(height: 14),
-                          ...List.generate(_playerCtrls.length, (i) {
+                          ...List.generate(_playerRows.length, (i) {
                             return Padding(
                               padding: const EdgeInsets.only(bottom: 12),
                               child: Row(children: [
                                 Expanded(
+                                  flex: 3,
                                   child: _Field(
-                                    controller: _playerCtrls[i],
-                                    label: 'Player ${i + 1}',
+                                    controller: _playerRows[i].nameCtrl,
+                                    label: 'Player ${i + 1} Name',
                                     hint: 'e.g. Usman Shahid',
                                     icon: Icons.person_outline,
                                   ),
                                 ),
                                 const SizedBox(width: 8),
-                                if (_playerCtrls.length > 1)
+                                Expanded(
+                                  flex: 2,
+                                  child: Container(
+                                    height: 52,
+                                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                                    decoration: BoxDecoration(
+                                      color: C.gLight.withAlpha(60),
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: DropdownButtonHideUnderline(
+                                      child: DropdownButton<String>(
+                                        value: _playerRows[i].role,
+                                        isExpanded: true,
+                                        icon: const Icon(Icons.keyboard_arrow_down_rounded, color: C.g2, size: 18),
+                                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: C.dark),
+                                        onChanged: (v) {
+                                          if (v != null) setState(() => _playerRows[i].role = v);
+                                        },
+                                        items: ['Batsman', 'Bowler', 'All-rounder']
+                                            .map((role) => DropdownMenuItem(
+                                                  value: role,
+                                                  child: Text(role),
+                                                ))
+                                            .toList(),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                if (_playerRows.length > 1)
                                   _RemoveButton(
                                       onTap: () => _removePlayerField(i)),
                               ]),

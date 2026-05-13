@@ -5,13 +5,13 @@ import '../../models/scoring_models.dart';
 import '../../state/app_store.dart';
 import '../../theme/app_theme.dart';
 import '../../route_paths.dart';
+import '../../services/supabase_service.dart';
 import 'match_scorecard_screen.dart' show MatchScorecardRouteArgs;
 import 'player_matches_screen.dart';
 import 'player_stats_screen.dart';
 import 'player_profile_screen.dart';
 import 'my_teams_screen.dart';
 import 'ai_chat_screen.dart';
-
 
 class PlayerHomeScreen extends StatefulWidget {
   const PlayerHomeScreen({super.key});
@@ -210,6 +210,7 @@ class _DashboardTabState extends State<_DashboardTab>
   late AnimationController _ctrl;
   late Animation<double> _fade;
   late Animation<Offset> _slide;
+  int _unreadCount = 0;
 
   @override
   void initState() {
@@ -221,6 +222,13 @@ class _DashboardTabState extends State<_DashboardTab>
     _slide = Tween(begin: const Offset(0, 0.04), end: Offset.zero)
         .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeOut));
     _ctrl.forward();
+    _loadUnreadCount();
+  }
+
+  Future<void> _loadUnreadCount() async {
+    final count = await SupabaseService.fetchUnreadNotificationCount();
+    if (!mounted) return;
+    setState(() => _unreadCount = count);
   }
 
   @override
@@ -282,23 +290,51 @@ class _DashboardTabState extends State<_DashboardTab>
                         ],
                       ),
                     ),
-                    // Notification bell
-                    Container(
-                      width: 42,
-                      height: 42,
-                      margin: const EdgeInsets.only(right: 10),
-                      decoration: BoxDecoration(
-                        color: C.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withAlpha(13),
-                            blurRadius: 8,
-                          )
-                        ],
+                    // Notification bell with badge
+                    GestureDetector(
+                      onTap: () async {
+                        await Navigator.pushNamed(
+                            context, RoutePaths.notifications);
+                        // Refresh badge after returning
+                        _loadUnreadCount();
+                      },
+                      child: Container(
+                        width: 42,
+                        height: 42,
+                        margin: const EdgeInsets.only(right: 10),
+                        decoration: BoxDecoration(
+                          color: C.white,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withAlpha(13),
+                              blurRadius: 8,
+                            )
+                          ],
+                        ),
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            const Center(
+                              child: Icon(Icons.notifications_outlined,
+                                  size: 21, color: C.dark),
+                            ),
+                            if (_unreadCount > 0)
+                              Positioned(
+                                top: 7,
+                                right: 7,
+                                child: Container(
+                                  width: 9,
+                                  height: 9,
+                                  decoration: const BoxDecoration(
+                                    color: Color(0xFFE53935),
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
-                      child: const Icon(Icons.notifications_outlined,
-                          size: 21, color: C.dark),
                     ),
                     // Avatar
                     Container(
@@ -349,11 +385,9 @@ class _DashboardTabState extends State<_DashboardTab>
                     context,
                     RoutePaths.newMatch,
                   ),
-                  onMyTeams: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                        builder: (_) => const MyTeamsScreen()),
-                  ),
+                  onMyTeams: () async {
+                    await Navigator.pushNamed(context, RoutePaths.myTeams);
+                  },
                   onAnalytics: widget.onOpenStats,
                   onRankings: () => Navigator.pushNamed(
                     context,
@@ -744,8 +778,8 @@ class _QuickActions extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = [
-      _QA(Icons.add_circle_outline_rounded, 'New\nMatch', onNewMatch),
-      _QA(Icons.group_outlined, 'My\nTeams', onMyTeams),
+      _QA(Icons.add_circle_outline_rounded, 'New Match', onNewMatch),
+      _QA(Icons.group_outlined, 'My Teams', onMyTeams),
       _QA(Icons.stacked_line_chart_rounded, 'Analytics', onAnalytics),
       _QA(Icons.star_border_rounded, 'Rankings', onRankings),
     ];
@@ -808,7 +842,8 @@ class _QuickActionTileState extends State<_QuickActionTile>
       child: ScaleTransition(
         scale: _scale,
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 16),
+          height: 96,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
           decoration: BoxDecoration(
             color: C.white,
             borderRadius: BorderRadius.circular(18),
@@ -820,28 +855,33 @@ class _QuickActionTileState extends State<_QuickActionTile>
               ),
             ],
           ),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: C.gLight,
-                borderRadius: BorderRadius.circular(13),
+          child: Column(
+            mainAxisSize: MainAxisSize.max,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: C.gLight,
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: Icon(widget.item.icon, color: C.g2, size: 22),
               ),
-              child:
-                  Icon(widget.item.icon, color: C.g2, size: 22),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              widget.item.label,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w600,
-                  color: C.dark,
-                  height: 1.3),
-            ),
-          ]),
+              const SizedBox(height: 8),
+              Text(
+                widget.item.label,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    color: C.dark,
+                    height: 1.3),
+              ),
+            ],
+          ),
         ),
       ),
     );

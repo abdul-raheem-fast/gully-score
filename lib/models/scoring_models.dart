@@ -94,9 +94,11 @@ class PlayerInMatch {
 
   bool isBatting;
   bool isBowling;
+  String role;
 
   PlayerInMatch({
     required this.name,
+    this.role = 'Batsman',
     this.runs = 0,
     this.ballsFaced = 0,
     this.fours = 0,
@@ -123,7 +125,7 @@ class PlayerInMatch {
   String get oversText => '$oversBowled.${ballsBowled % 6}';
 
   PlayerInMatch copy() {
-    return PlayerInMatch(name: name)
+    return PlayerInMatch(name: name, role: role)
       ..runs = runs
       ..ballsFaced = ballsFaced
       ..fours = fours
