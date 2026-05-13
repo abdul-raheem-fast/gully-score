@@ -229,6 +229,8 @@ class _AdminMatchesScreenState extends State<AdminMatchesScreen> {
             ),
           ],
           bottom: const TabBar(
+            labelColor: C.white,
+            unselectedLabelColor: Colors.white70,
             indicatorColor: C.white,
             indicatorWeight: 3,
             tabs: [

@@ -57,8 +57,10 @@ class AiChatService {
         final answer = (data['answer'] as String).trim();
         if (answer.isNotEmpty) return answer;
       }
-    } on FunctionException catch (_) {
-      // The Edge Function may not be deployed during local development.
+    } on FunctionException catch (e) {
+      if (e.status == 429 || e.toString().contains('429')) {
+        return 'Broskie AI is currently reaching its quota limits. Please try again in a few seconds or ask a simpler question.';
+      }
     } catch (_) {}
 
     return _localAnswer(trimmed, context);

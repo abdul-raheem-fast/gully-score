@@ -132,8 +132,12 @@ class _Header extends StatelessWidget {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
-      decoration: const BoxDecoration(
-        color: C.white,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFF1E3A8A), Color(0xFF3B82F6)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
         boxShadow: [
           BoxShadow(
             color: Color(0x12000000),
@@ -144,14 +148,20 @@ class _Header extends StatelessWidget {
       ),
       child: Row(
         children: [
+          IconButton(
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(Icons.arrow_back, color: Colors.white),
+            tooltip: 'Back',
+          ),
+          const SizedBox(width: 4),
           Container(
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: C.gLight,
+              color: Colors.white.withOpacity(0.2),
               borderRadius: BorderRadius.circular(14),
             ),
-            child: const Icon(Icons.auto_awesome_rounded, color: C.g2),
+            child: const Icon(Icons.auto_awesome_rounded, color: Colors.white),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -161,7 +171,7 @@ class _Header extends StatelessWidget {
                 const Text(
                   'Broskie AI',
                   style: TextStyle(
-                    color: C.dark,
+                    color: Colors.white,
                     fontSize: 22,
                     fontWeight: FontWeight.w800,
                   ),
@@ -170,8 +180,8 @@ class _Header extends StatelessWidget {
                   isAdminView
                       ? 'Admin analytics mode  -  $matchCount matches synced'
                       : '$matchCount matches synced  -  $teamCount teams loaded',
-                  style: const TextStyle(
-                    color: C.grey,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.9),
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
                   ),
@@ -202,7 +212,7 @@ class _MessageBubble extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: isUser ? C.g2 : C.white,
+          color: isUser ? Color(0xFF3B82F6) : C.white,
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(16),
             topRight: const Radius.circular(16),
@@ -255,7 +265,7 @@ class _ThinkingBubble extends StatelessWidget {
         child: const SizedBox(
           width: 18,
           height: 18,
-          child: CircularProgressIndicator(strokeWidth: 2, color: C.g2),
+          child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF3B82F6)),
         ),
       ),
     );
@@ -284,12 +294,12 @@ class _SuggestionRail extends StatelessWidget {
             label: Text(suggestion),
             onPressed: () => onTap(suggestion),
             labelStyle: const TextStyle(
-              color: C.g2,
+              color: Color(0xFF3B82F6),
               fontSize: 12,
               fontWeight: FontWeight.w700,
             ),
             backgroundColor: C.white,
-            side: BorderSide(color: C.g2.withAlpha(45)),
+            side: BorderSide(color: Color(0xFF3B82F6).withAlpha(45)),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
@@ -341,7 +351,7 @@ class _Composer extends StatelessWidget {
             child: FilledButton(
               onPressed: enabled ? onSend : null,
               style: FilledButton.styleFrom(
-                backgroundColor: C.g2,
+                backgroundColor: Color(0xFF3B82F6),
                 disabledBackgroundColor: C.hint,
                 padding: EdgeInsets.zero,
                 shape: RoundedRectangleBorder(
