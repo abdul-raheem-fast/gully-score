@@ -22,9 +22,6 @@ import 'screens/player/live_scoring_screen.dart';
 import 'screens/player/match_scorecard_screen.dart';
 import 'screens/player/ai_chat_screen.dart';
 import 'screens/player/rankings_screen.dart';
-import 'screens/player/my_teams_screen.dart';
-import 'screens/player/notifications_screen.dart';
-import 'screens/player/create_team_screen.dart';
 
 /// Central app route definitions.
 class AppRoutes {
@@ -53,49 +50,49 @@ class AppRoutes {
         page = const OtpResetScreen();
         break;
       case RoutePaths.home:
-        page = const PlayerHomeScreen();
+        page = const MaintenanceGate(child: PlayerHomeScreen());
         break;
       case RoutePaths.admin:
-        page = const AdminDashboardScreen();
+        page = const AdminGate(child: AdminDashboardScreen());
         break;
       case RoutePaths.adminUsers:
-        page = const AdminUsersScreen();
+        page = const AdminGate(child: AdminUsersScreen());
         break;
       case RoutePaths.adminPlayers:
-        page = const AdminPlayersScreen();
+        page = const AdminGate(child: AdminPlayersScreen());
         break;
       case RoutePaths.adminInbox:
-        page = const AdminInboxScreen();
+        page = const AdminGate(child: AdminInboxScreen());
         break;
       case RoutePaths.adminMatches:
-        page = const AdminMatchesScreen();
+        page = const AdminGate(child: AdminMatchesScreen());
         break;
       case RoutePaths.adminProfile:
-        page = const AdminProfileScreen();
+        page = const AdminGate(child: AdminProfileScreen());
         break;
       case RoutePaths.adminEditProfile:
-        page = const AdminEditProfileScreen();
+        page = const AdminGate(child: AdminEditProfileScreen());
         break;
       case RoutePaths.adminTeams:
-        page = const AdminTeamsScreen();
+        page = const AdminGate(child: AdminTeamsScreen());
         break;
       case RoutePaths.adminReports:
-        page = const AdminReportsScreen();
+        page = const AdminGate(child: AdminReportsScreen());
         break;
       case RoutePaths.adminSettings:
-        page = const AdminSettingsScreen();
+        page = const AdminGate(child: AdminSettingsScreen());
         break;
       case RoutePaths.adminAiChat:
-        page = const AiChatScreen(isAdminView: true);
+        page = const AdminGate(child: AiChatScreen(isAdminView: true));
         break;
       case RoutePaths.newMatch:
-        page = const NewMatchScreen();
+        page = const MaintenanceGate(child: NewMatchScreen());
         break;
       case RoutePaths.aiChat:
-        page = const AiChatScreen();
+        page = const MaintenanceGate(child: AiChatScreen());
         break;
       case RoutePaths.rankings:
-        page = const RankingsScreen();
+        page = const MaintenanceGate(child: RankingsScreen());
         break;
       case RoutePaths.myTeams:
         page = const MyTeamsScreen();
@@ -109,20 +106,24 @@ class AppRoutes {
       case RoutePaths.liveScoring:
         final args = settings.arguments as ScoringSession?;
         page = args == null
-            ? const PlayerHomeScreen()
-            : LiveScoringScreen(session: args);
+            ? const MaintenanceGate(child: PlayerHomeScreen())
+            : MaintenanceGate(child: LiveScoringScreen(session: args));
         break;
       case RoutePaths.matchScorecard:
         final raw = settings.arguments;
         if (raw is MatchScorecardRouteArgs && raw.matchId.trim().isNotEmpty) {
-          page = MatchScorecardScreen(
-            matchId: raw.matchId.trim(),
-            initialSnapshot: raw.snapshot,
+          page = MaintenanceGate(
+            child: MatchScorecardScreen(
+              matchId: raw.matchId.trim(),
+              initialSnapshot: raw.snapshot,
+            ),
           );
         } else if (raw is String && raw.trim().isNotEmpty) {
-          page = MatchScorecardScreen(matchId: raw.trim());
+          page = MaintenanceGate(
+            child: MatchScorecardScreen(matchId: raw.trim()),
+          );
         } else {
-          page = const PlayerHomeScreen();
+          page = const MaintenanceGate(child: PlayerHomeScreen());
         }
         break;
     }

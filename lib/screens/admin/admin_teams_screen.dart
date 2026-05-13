@@ -13,20 +13,15 @@ class AdminTeamsScreen extends StatefulWidget {
 }
 
 class _AdminTeamsScreenState extends State<AdminTeamsScreen> {
-  String _query = '';
-
-  List<AdminTeam> _filterTeams(List<AdminTeam> teams) {
-    if (_query.isEmpty) return teams;
-    final q = _query.toLowerCase();
-    return teams.where((team) {
-      return team.name.toLowerCase().contains(q) || team.abbreviation.toLowerCase().contains(q);
-    }).toList();
-  }
+  static const int _pageSize = 12;
+  int _visibleCount = _pageSize;
 
   @override
   Widget build(BuildContext context) {
     final store = AppStore.of(context);
-    final teams = _filterTeams(store.teams);
+    final teams = store.teams;
+    final visibleTeams = teams.take(_visibleCount).toList();
+    final hasMore = teams.length > visibleTeams.length;
 
     return Scaffold(
       backgroundColor: C.bg,
@@ -39,6 +34,7 @@ class _AdminTeamsScreenState extends State<AdminTeamsScreen> {
             onPressed: () async {
               await store.refreshTeams();
               if (!context.mounted) return;
+              setState(() => _visibleCount = _pageSize);
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Teams refreshed')),
               );
@@ -47,19 +43,6 @@ class _AdminTeamsScreenState extends State<AdminTeamsScreen> {
             tooltip: 'Refresh from backend',
           ),
         ],
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(60),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
-            child: TextField(
-              onChanged: (value) => setState(() => _query = value),
-              decoration: InputDecoration(
-                hintText: 'Search teams',
-                prefixIcon: const Icon(Icons.search),
-              ),
-            ),
-          ),
-        ),
       ),
       body: Column(
         children: [
@@ -81,10 +64,22 @@ class _AdminTeamsScreenState extends State<AdminTeamsScreen> {
           Expanded(
             child: ListView.separated(
               padding: const EdgeInsets.all(16),
-              itemCount: teams.length,
+              itemCount: visibleTeams.length + (hasMore ? 1 : 0),
               separatorBuilder: (_, __) => const SizedBox(height: 12),
               itemBuilder: (context, index) {
-                final team = teams[index];
+                if (index >= visibleTeams.length) {
+                  return Center(
+                    child: TextButton(
+                      onPressed: () {
+                        setState(() {
+                          _visibleCount += _pageSize;
+                        });
+                      },
+                      child: const Text('Load more'),
+                    ),
+                  );
+                }
+                final team = visibleTeams[index];
                 return _teamCard(context, team);
               },
             ),
@@ -195,15 +190,79 @@ class _AdminTeamsScreenState extends State<AdminTeamsScreen> {
     return InkWell(
       borderRadius: BorderRadius.circular(16),
       onTap: () {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Open details for ${team.name}')),
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text(team.name),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Captain: ${team.captain}',
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
+                Text('Total Players: ${team.playerCount}'),
+                const SizedBox(height: 4),
+                Text('Matches Played: ${team.matchCount}'),
+                const SizedBox(height: 16),
+                ElevatedButton.icon(
+                  onPressed: () async {
+                    final store = AppStore.of(context);
+                    Navigator.pop(context);
+
+                    if (team.id.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Cannot delete this team yet.'),
+                        ),
+                      );
+                      return;
+                    }
+
+                    try {
+                      await store.deleteTeam(team.id);
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                            content: Text(
+                                'Team ${team.name} deleted successfully.')),
+                      );
+                    } catch (_) {
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Error deleting team.')),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.delete, size: 18),
+                  label: const Text('Delete Team'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red.shade600,
+                    foregroundColor: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child:
+                    const Text('Close', style: TextStyle(color: C.adminBlue)),
+              ),
+            ],
+          ),
         );
       },
       child: Container(
         decoration: BoxDecoration(
           color: C.white,
           borderRadius: BorderRadius.circular(16),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 8, offset: const Offset(0, 3))],
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 8,
+                offset: const Offset(0, 3))
+          ],
         ),
         padding: const EdgeInsets.all(14),
         child: Row(
@@ -218,7 +277,8 @@ class _AdminTeamsScreenState extends State<AdminTeamsScreen> {
               child: Center(
                 child: Text(
                   team.abbreviation,
-                  style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, color: Colors.white),
                 ),
               ),
             ),
@@ -227,9 +287,12 @@ class _AdminTeamsScreenState extends State<AdminTeamsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(team.name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+                  Text(team.name,
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w700, fontSize: 16)),
                   const SizedBox(height: 4),
-                  Text('Captain: ${team.captain}', style: TextStyle(color: C.grey, fontSize: 13)),
+                  Text('Captain: ${team.captain}',
+                      style: TextStyle(color: C.grey, fontSize: 13)),
                   const SizedBox(height: 10),
                   Row(
                     children: [
@@ -257,7 +320,8 @@ class _AdminTeamsScreenState extends State<AdminTeamsScreen> {
       ),
       child: Text(
         '$value $label',
-        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.g1),
+        style:
+            TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: C.g1),
       ),
     );
   }

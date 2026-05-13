@@ -8,16 +8,20 @@ import '../services/supabase_service.dart';
 enum UserRole { admin, player }
 
 class AuthUser {
+  final String id;
   final String email;
   final String password;
   final String name;
   final UserRole role;
+  final bool isBlocked;
 
   const AuthUser({
+    required this.id,
     required this.email,
     required this.password,
     required this.name,
     required this.role,
+    required this.isBlocked,
   });
 }
 
@@ -50,7 +54,8 @@ class AppStoreState extends State<AppStore> {
   final List<TeamMembership> _myMemberships = [];
   List<TeamMembership> get myMemberships => List.unmodifiable(_myMemberships);
   final List<TeamMembership> _adminMemberships = [];
-  List<TeamMembership> get adminMemberships => List.unmodifiable(_adminMemberships);
+  List<TeamMembership> get adminMemberships =>
+      List.unmodifiable(_adminMemberships);
 
   final List<AuthUser> _users = [];
 
@@ -89,13 +94,16 @@ class AppStoreState extends State<AppStore> {
       selectedRole = role;
       userName = (name == null || name.isEmpty) ? user.email ?? '' : name;
       if (user.email != null &&
-          !_users.any((u) => u.email.toLowerCase() == user.email!.toLowerCase())) {
+          !_users
+              .any((u) => u.email.toLowerCase() == user.email!.toLowerCase())) {
         _users.add(
           AuthUser(
+            id: user.id,
             email: user.email!,
             password: '',
             name: userName,
             role: selectedRole ?? UserRole.player,
+            isBlocked: false,
           ),
         );
       }
@@ -169,6 +177,53 @@ class AppStoreState extends State<AppStore> {
 
   Future<void> refreshTeams() => _hydrateTeams();
 
+  Future<void> deleteTeam(String teamId) async {
+    try {
+      await SupabaseService.deleteTeam(teamId);
+      await refreshTeams();
+    } catch (e) {
+      debugPrint('Error deleting team: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> blockUser(String userId) async {
+    try {
+      // Soft-block the user via profile flag.
+      await SupabaseService.blockUser(userId);
+      await refreshUsers();
+    } catch (e) {
+      debugPrint('Error blocking user: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> unblockUser(String userId) async {
+    try {
+      await SupabaseService.unblockUser(userId);
+      await refreshUsers();
+    } catch (e) {
+      debugPrint('Error unblocking user: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> setUserRole({
+    required String userId,
+    required UserRole role,
+  }) async {
+    try {
+      await SupabaseService.setUserRole(
+        userId: userId,
+        role: role.name,
+      );
+      await refreshUsers();
+    } catch (e) {
+      debugPrint('Error updating user role: $e');
+      rethrow;
+    }
+  }
+
   Future<void> _hydrateUsers() async {
     setState(() {
       isLoadingUsers = true;
@@ -181,10 +236,12 @@ class AppStoreState extends State<AppStore> {
         final roleRaw = row['role']?.toString();
         final role = _userRoleFromString(roleRaw);
         return AuthUser(
+          id: (row['id'] as String?) ?? '',
           email: (row['email'] as String?) ?? '',
           password: '',
           name: (row['name'] as String?) ?? '',
           role: role,
+          isBlocked: (row['is_blocked'] as bool?) ?? false,
         );
       }).toList();
       setState(() {
@@ -291,7 +348,8 @@ class AppStoreState extends State<AppStore> {
   }
 
   /// Update membership status (approve/reject).
-  Future<void> updateMembershipStatus(String id, MembershipStatus status) async {
+  Future<void> updateMembershipStatus(
+      String id, MembershipStatus status) async {
     final index = _adminMemberships.indexWhere((m) => m.id == id);
     if (index == -1) return;
     final old = _adminMemberships[index];
@@ -338,10 +396,12 @@ class AppStoreState extends State<AppStore> {
       (u) => _normalizeEmail(u.email) == normalizedEmail && u.role == role,
     );
     final user = AuthUser(
+      id: '',
       email: normalizedEmail,
       password: password,
       name: name.trim(),
       role: role,
+      isBlocked: false,
     );
 
     setState(() {

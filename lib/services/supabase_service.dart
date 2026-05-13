@@ -37,6 +37,45 @@ class SupabaseService {
   static String? getCurrentUserName() =>
       currentUser?.userMetadata?['name']?.toString();
 
+  static Future<String?> fetchCurrentUserRole() async {
+    final user = currentUser;
+    if (user == null) return null;
+    try {
+      final response = await client
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .maybeSingle();
+      final role = response?['role']?.toString();
+      if (role != null && role.isNotEmpty) return role;
+    } catch (_) {}
+    return getCurrentUserRole();
+  }
+
+  static Future<Map<String, dynamic>> fetchCurrentUserStatus() async {
+    final user = currentUser;
+    if (user == null) {
+      return {'role': null, 'is_blocked': false};
+    }
+    try {
+      final response = await client
+          .from('profiles')
+          .select('role,is_blocked')
+          .eq('id', user.id)
+          .maybeSingle();
+      if (response != null) {
+        return {
+          'role': response['role']?.toString() ?? getCurrentUserRole(),
+          'is_blocked': (response['is_blocked'] as bool?) ?? false,
+        };
+      }
+    } catch (_) {}
+    return {
+      'role': getCurrentUserRole(),
+      'is_blocked': false,
+    };
+  }
+
   static Future<void> signOut() => client.auth.signOut();
 
   static Future<void> signInWithGoogle() async {
@@ -150,11 +189,26 @@ class SupabaseService {
   }
 
   static Future<List<Map<String, dynamic>>> fetchProfiles() async {
-    final response = await client
+    try {
+      final response = await client.functions.invoke(
+        'admin-manage',
+        body: {'action': 'list_profiles'},
+      );
+      if (response.data is Map) {
+        final payload = response.data as Map<String, dynamic>;
+        final rows = payload['profiles'];
+        if (rows is List) {
+          return List<Map<String, dynamic>>.from(rows);
+        }
+      }
+    } catch (_) {}
+
+    // Fallback to self-profile if admin listing is not available or fails.
+    final List<Map<String, dynamic>> responseSelf = await client
         .from('profiles')
         .select()
         .order('created_at', ascending: false);
-    return List<Map<String, dynamic>>.from(response);
+    return responseSelf;
   }
 
   static Future<Map<String, dynamic>> fetchCurrentUserProfile() async {
@@ -222,13 +276,13 @@ class SupabaseService {
     }).eq('id', reportId);
   }
 
-  static Future<List<AdminMatch>> fetchAdminMatches() async {
-    final response = await client
+  static Future<List<AdminMatch>> fetchAdminMatches({int limit = 40}) async {
+    final List<Map<String, dynamic>> rows = await client
         .from('matches')
         .select()
-        .order('created_at', ascending: false);
+        .order('created_at', ascending: false)
+        .limit(limit);
 
-    final rows = List<Map<String, dynamic>>.from(response);
     final matches = rows.map(_rowToAdminMatch).toList();
     if (matches.isEmpty) return matches;
 
@@ -341,6 +395,8 @@ class SupabaseService {
   ) async {
     final mid = matchId.trim();
     if (!_isUuidString(mid)) return [];
+
+    // 1. Fetch all innings for this match.
     final inningsResp = await client
         .from('innings')
         .select('id,innings_no')
@@ -349,29 +405,38 @@ class SupabaseService {
     final inningsRows = List<Map<String, dynamic>>.from(inningsResp);
     if (inningsRows.isEmpty) return [];
 
-    final out = <Map<String, dynamic>>[];
-    for (final inn in inningsRows) {
-      final inningsId = inn['id']?.toString();
-      final inningsNo = (inn['innings_no'] as num?)?.toInt() ?? 1;
-      if (inningsId == null || inningsId.isEmpty) continue;
-      final eventsResp = await client
-          .from('ball_events')
-          .select()
-          .eq('innings_id', inningsId)
-          .order('over_no', ascending: true)
-          .order('ball_no', ascending: true)
-          .order('created_at', ascending: true);
-      final events = List<Map<String, dynamic>>.from(eventsResp);
-      for (final row in events) {
-        out.add({
-          ...row,
-          'innings_no': inningsNo,
-          'is_wicket':
-              ((row['wicket_type'] as String?)?.trim().isNotEmpty ?? false),
-        });
+    // 2. Batch-fetch all ball events for all innings in one query.
+    final List<String> inningsIds = inningsRows
+        .map((r) => r['id']?.toString() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toList();
+    if (inningsIds.isEmpty) return [];
+
+    final List<Map<String, dynamic>> eventsResp = await client
+        .from('ball_events')
+        .select()
+        .inFilter('innings_id', inningsIds)
+        .order('over_no', ascending: true)
+        .order('ball_no', ascending: true)
+        .order('created_at', ascending: true);
+
+    // 3. Map innings_no back to events for client UI.
+    final Map<String, int> idToNo = {};
+    for (final r in inningsRows) {
+      final id = r['id']?.toString() ?? '';
+      if (id.isNotEmpty) {
+        idToNo[id] = (r['innings_no'] as num?)?.toInt() ?? 1;
       }
     }
-    return out;
+
+    return eventsResp.map((row) {
+      final innId = row['innings_id']?.toString() ?? '';
+      return {
+        ...row,
+        'innings_no': idToNo[innId] ?? 1,
+        'is_wicket': ((row['wicket_type'] as String?)?.trim().isNotEmpty ?? false),
+      };
+    }).toList();
   }
 
   static Future<void> updateAdminMatch(AdminMatch match) async {
@@ -476,14 +541,16 @@ class SupabaseService {
   }
 
   static Future<List<AdminTeam>> fetchAdminTeams() async {
-    final playersResponse = await client.from('players').select();
-    final matchesResponse = await client
-        .from('matches')
-        .select('id,team_a_name,team_b_name')
-        .order('created_at', ascending: false);
-
-    final players = List<Map<String, dynamic>>.from(playersResponse);
-    final matches = List<Map<String, dynamic>>.from(matchesResponse);
+    final List<Map<String, dynamic>> teamsRows = await client
+      .from('teams')
+      .select('id,name,abbreviation,captain_name');
+    // Limit players/matches fetch to avoid hitting row limits or 429s as the DB grows.
+    final List<Map<String, dynamic>> players = await client.from('team_players').select().limit(1000);
+    final List<Map<String, dynamic>> matches = await client
+      .from('matches')
+      .select('id,team_a_name,team_b_name')
+      .order('created_at', ascending: false)
+      .limit(100);
 
     final matchCountByTeam = <String, int>{};
     for (final row in matches) {
@@ -505,26 +572,20 @@ class SupabaseService {
     }
 
     final teams = <AdminTeam>[];
-    int idx = 1;
-    for (final entry in buckets.entries) {
-      final teamName = entry.key;
-      final members = entry.value;
-      final captainRow = members.firstWhere(
-        (m) => m['is_captain'] == true,
-        orElse: () => members.first,
-      );
-      final captainName = (captainRow['player_name'] as String?) ?? 'Unknown';
+    for (final row in teamsRows) {
+      final teamName = (row['name'] as String?)?.trim() ?? '';
+      if (teamName.isEmpty) continue;
+      final members = buckets[teamName] ?? const <Map<String, dynamic>>[];
       teams.add(
         AdminTeam(
-          id: 'team_$idx',
+          id: (row['id'] as String?) ?? '',
           name: teamName,
-          abbreviation: _abbreviation(teamName),
-          captain: captainName,
+          abbreviation: (row['abbreviation'] as String?) ?? _abbreviation(teamName),
+          captain: (row['captain_name'] as String?) ?? 'Unknown',
           playerCount: members.length,
           matchCount: matchCountByTeam[teamName] ?? 0,
         ),
       );
-      idx++;
     }
 
     if (teams.isEmpty) {
@@ -537,7 +598,7 @@ class SupabaseService {
           if (teams.any((t) => t.name == teamName)) continue;
           teams.add(
             AdminTeam(
-              id: 'team_$idx',
+              id: '',
               name: teamName,
               abbreviation: _abbreviation(teamName),
               captain: 'TBD',
@@ -545,7 +606,6 @@ class SupabaseService {
               matchCount: matchCountByTeam[teamName] ?? 0,
             ),
           );
-          idx++;
         }
       }
     }
@@ -927,7 +987,7 @@ class SupabaseService {
   static Future<List<Map<String, dynamic>>> fetchPendingRequestsForCaptain(
       List<String> captainTeams) async {
     if (captainTeams.isEmpty) return [];
-    // Fetch pending memberships for those teams.
+    // 1. Fetch pending memberships for those teams.
     final response = await client
         .from('team_memberships')
         .select()
@@ -935,35 +995,87 @@ class SupabaseService {
         .eq('status', 'pending')
         .order('applied_at', ascending: true);
     final rows = List<Map<String, dynamic>>.from(response);
+    if (rows.isEmpty) return [];
 
-    // Enrich with profile name/email for each row.
-    final enriched = <Map<String, dynamic>>[];
-    for (final row in rows) {
-      final applicantId = row['user_id']?.toString() ?? '';
-      String playerName = 'Unknown Player';
-      String userEmail = '';
+    // 2. Batch-fetch profiles for all unique user_ids to avoid N+1 queries.
+    final List<String> userIds = rows
+        .map((r) => r['user_id']?.toString() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+
+    final Map<String, Map<String, String>> profilesMap = {};
+    if (userIds.isNotEmpty) {
       try {
-        final profiles = await client
+        final List<Map<String, dynamic>> profilesResp = await client
             .from('profiles')
-            .select('name, email')
-            .eq('id', applicantId)
-            .limit(1);
-        final profileRows = List<Map<String, dynamic>>.from(profiles);
-        if (profileRows.isNotEmpty) {
-          playerName = (profileRows.first['name'] as String?) ?? playerName;
-          userEmail = (profileRows.first['email'] as String?) ?? '';
+            .select('id, name, email')
+            .inFilter('id', userIds);
+        for (final p in profilesResp) {
+          final id = p['id']?.toString() ?? '';
+          if (id.isNotEmpty) {
+            profilesMap[id] = {
+              'name': (p['name'] as String?) ?? 'Unknown Player',
+              'email': (p['email'] as String?) ?? '',
+            };
+          }
         }
       } catch (_) {}
-      enriched.add({
-        ...row,
-        'player_name': playerName,
-        'user_email': userEmail,
-      });
     }
-    return enriched;
+
+    // 3. Merge profile data back into membership rows.
+    return rows.map((row) {
+      final uid = row['user_id']?.toString() ?? '';
+      final pData = profilesMap[uid];
+      return {
+        ...row,
+        'player_name': pData?['name'] ?? 'Unknown Player',
+        'user_email': pData?['email'] ?? '',
+      };
+    }).toList();
   }
 
+<<<<<<< HEAD
   /// Approve or reject a membership request and notify the applicant.
+=======
+  /// Approve or reject a membership request.
+  static Future<void> _invokeAdminManage(Map<String, dynamic> body) async {
+    await client.functions.invoke('admin-manage', body: body);
+  }
+
+  static Future<void> deleteTeam(String teamId) async {
+    await _invokeAdminManage({
+      'action': 'delete_team',
+      'teamId': teamId,
+    });
+  }
+
+  static Future<void> blockUser(String userId) async {
+    await _invokeAdminManage({
+      'action': 'block_user',
+      'userId': userId,
+    });
+  }
+
+  static Future<void> unblockUser(String userId) async {
+    await _invokeAdminManage({
+      'action': 'unblock_user',
+      'userId': userId,
+    });
+  }
+
+  static Future<void> setUserRole({
+    required String userId,
+    required String role,
+  }) async {
+    await _invokeAdminManage({
+      'action': 'set_user_role',
+      'userId': userId,
+      'role': role,
+    });
+  }
+
+>>>>>>> 102e8a27d2c2d7ababede0851e3d71760e91e8b6
   static Future<void> updateMembershipStatus({
     required String id,
     required String status, // 'approved' | 'rejected'

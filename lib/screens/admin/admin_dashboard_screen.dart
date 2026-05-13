@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../models/admin_models.dart';
 import '../../route_paths.dart';
+import '../../services/supabase_service.dart';
 import '../../state/app_store.dart';
 import '../../theme/app_theme.dart';
 
@@ -396,9 +397,9 @@ class _AiFab extends StatelessWidget {
         elevation: 0,
         label: const Text(
           'Broskie AI',
-          style: TextStyle(fontWeight: FontWeight.w700),
+          style: TextStyle(fontWeight: FontWeight.w700, color: Colors.white),
         ),
-        icon: const Icon(Icons.auto_awesome_rounded),
+        icon: const Icon(Icons.auto_awesome_rounded, color: Colors.white),
       ),
     );
   }
@@ -496,9 +497,35 @@ class _DashboardBody extends StatelessWidget {
   }
 }
 
-class _TopBar extends StatelessWidget {
+class _TopBar extends StatefulWidget {
   final VoidCallback? onMenuTap;
   const _TopBar({this.onMenuTap});
+
+  @override
+  State<_TopBar> createState() => _TopBarState();
+}
+
+class _TopBarState extends State<_TopBar> {
+  int _unreadCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUnreadCount();
+  }
+
+  Future<void> _loadUnreadCount() async {
+    try {
+      final captainTeams = await SupabaseService.fetchCaptainTeams();
+      final requests =
+          await SupabaseService.fetchPendingRequestsForCaptain(captainTeams);
+      if (mounted) {
+        setState(() {
+          _unreadCount = requests.length;
+        });
+      }
+    } catch (_) {}
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -506,7 +533,6 @@ class _TopBar extends StatelessWidget {
       builder: (context, c) {
         final w = c.maxWidth;
         final isNarrow = w < 560;
-        final isMid = w < 860;
 
         final title = Text(
           'Dashboard overview',
@@ -518,59 +544,26 @@ class _TopBar extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
         );
 
-        final searchField = TextField(
-          decoration: InputDecoration(
-            hintText: isNarrow ? 'Search' : 'Search...',
-            prefixIcon: const Icon(Icons.search),
-            filled: true,
-            fillColor: Colors.white,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 14),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-              borderSide: BorderSide.none,
-            ),
-          ),
-        );
-
         return Row(
           children: [
             IconButton(
-              onPressed: onMenuTap,
+              onPressed: widget.onMenuTap,
               icon: const Icon(Icons.menu),
               tooltip: 'Menu',
             ),
             const SizedBox(width: 8),
             Expanded(
-              child: Row(
-                children: [
-                  Expanded(child: title),
-                  if (!isNarrow) ...[
-                    const SizedBox(width: 12),
-                    if (isMid)
-                      Expanded(child: searchField)
-                    else
-                      SizedBox(width: 280, child: searchField),
-                  ],
-                ],
-              ),
+              child: title,
             ),
-            if (isNarrow)
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: _iconBubble(
-                  icon: Icons.search,
-                  onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Search coming soon'),
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  ),
-                ),
-              ),
             _iconBubble(
               icon: Icons.mail_outline,
               dotColor: Colors.red.shade600,
-              onTap: () => Navigator.pushNamed(context, RoutePaths.adminInbox),
+              count: _unreadCount,
+              onTap: () {
+                Navigator.pushNamed(context, RoutePaths.adminInbox).then((_) {
+                  _loadUnreadCount(); // Refresh count after returning
+                });
+              },
             ),
             const SizedBox(width: 10),
             _avatar(
@@ -587,6 +580,7 @@ class _TopBar extends StatelessWidget {
     required IconData icon,
     required VoidCallback onTap,
     Color? dotColor,
+    int? count,
   }) {
     return Stack(
       clipBehavior: Clip.none,
@@ -605,15 +599,34 @@ class _TopBar extends StatelessWidget {
             child: Icon(icon, color: C.grey),
           ),
         ),
-        if (dotColor != null)
+        if (dotColor != null && (count == null || count > 0))
           Positioned(
-            right: 10,
-            top: 10,
+            right: 0,
+            top: 0,
             child: Container(
-              width: 8,
-              height: 8,
-              decoration:
-                  BoxDecoration(color: dotColor, shape: BoxShape.circle),
+              constraints: BoxConstraints(
+                minWidth: count != null ? 18.0 : 8.0,
+                minHeight: count != null ? 18.0 : 8.0,
+              ),
+              padding: count != null
+                  ? const EdgeInsets.symmetric(horizontal: 4)
+                  : EdgeInsets.zero,
+              decoration: BoxDecoration(
+                color: dotColor,
+                borderRadius: count != null ? BorderRadius.circular(9) : null,
+                shape: count != null ? BoxShape.rectangle : BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: count != null
+                  ? Text(
+                      count.toString(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    )
+                  : null,
             ),
           ),
       ],
