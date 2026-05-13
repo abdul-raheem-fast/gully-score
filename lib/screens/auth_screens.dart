@@ -647,32 +647,34 @@ class _LoginScreenState extends State<LoginScreen>
 
                   const SizedBox(height: 28),
 
-                  // Divider
-                  Row(children: [
-                    Expanded(child: Divider(color: Colors.grey.shade200)),
-                    Padding(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 14),
-                      child: Text('Or continue with',
+                  // Social buttons — only for players
+                  if (_role != UserRole.admin) ...[
+                    // Divider
+                    Row(children: [
+                      Expanded(child: Divider(color: Colors.grey.shade200)),
+                      Padding(
+                        padding:
+                            const EdgeInsets.symmetric(horizontal: 14),
+                        child: Text('Or continue with',
+                            style: TextStyle(
+                                color: Colors.grey.shade400,
+                                fontSize: 13)),
+                      ),
+                      Expanded(child: Divider(color: Colors.grey.shade200)),
+                    ]),
+
+                    const SizedBox(height: 20),
+
+                    _SocialBtn(
+                      label: 'Continue with Google',
+                      icon: const Text('G',
                           style: TextStyle(
-                              color: Colors.grey.shade400,
-                              fontSize: 13)),
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF4285F4))),
+                      onTap: _signInWithGoogle,
                     ),
-                    Expanded(child: Divider(color: Colors.grey.shade200)),
-                  ]),
-
-                  const SizedBox(height: 20),
-
-                  // Social buttons — exactly as Figma
-                  _SocialBtn(
-                    label: 'Continue with Google',
-                    icon: const Text('G',
-                        style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF4285F4))),
-                    onTap: _signInWithGoogle,
-                  ),
+                  ],
 
                   const SizedBox(height: 32),
 

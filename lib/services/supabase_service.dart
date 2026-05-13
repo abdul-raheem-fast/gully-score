@@ -2000,4 +2000,37 @@ class SupabaseService {
       recentFormRuns: recentRuns,
     );
   }
+
+  static Future<Map<String, dynamic>> fetchAdminDashboardStats() async {
+    try {
+      final users = await client.from('profiles').select('id');
+      final teams = await client.from('teams').select('id');
+      final matches = await client.from('matches').select('id');
+      
+      return {
+        'total_users': users.length,
+        'total_teams': teams.length,
+        'total_matches': matches.length,
+      };
+    } catch (_) {
+      return {
+        'total_users': 0,
+        'total_teams': 0,
+        'total_matches': 0,
+      };
+    }
+  }
+
+  static Future<List<Map<String, dynamic>>> fetchAdminAuditLogs() async {
+    try {
+      final response = await client
+          .from('admin_audit_logs')
+          .select()
+          .order('created_at', ascending: false)
+          .limit(20);
+      return List<Map<String, dynamic>>.from(response);
+    } catch (_) {
+      return [];
+    }
+  }
 }

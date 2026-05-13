@@ -42,9 +42,6 @@ class _AdminDashboardLayoutState extends State<_AdminDashboardLayout> {
       case _AdminNav.players:
         Navigator.pushNamed(context, RoutePaths.adminPlayers);
         break;
-      case _AdminNav.inbox:
-        Navigator.pushNamed(context, RoutePaths.adminInbox);
-        break;
       case _AdminNav.users:
         Navigator.pushNamed(context, RoutePaths.adminUsers);
         break;
@@ -138,7 +135,6 @@ enum _AdminNav {
   matches,
   teams,
   players,
-  inbox,
   users,
   settings,
   reports
@@ -217,12 +213,6 @@ class _Sidebar extends StatelessWidget {
                     label: 'Players',
                     active: selected == _AdminNav.players,
                     onTap: () => onSelect(_AdminNav.players),
-                  ),
-                  _navItem(
-                    icon: Icons.inbox_outlined,
-                    label: 'Inbox',
-                    active: selected == _AdminNav.inbox,
-                    onTap: () => onSelect(_AdminNav.inbox),
                   ),
                   const SizedBox(height: 12),
                   _sectionLabel('SYSTEM'),
@@ -555,20 +545,10 @@ class _TopBarState extends State<_TopBar> {
             Expanded(
               child: title,
             ),
-            _iconBubble(
-              icon: Icons.mail_outline,
-              dotColor: Colors.red.shade600,
-              count: _unreadCount,
-              onTap: () {
-                Navigator.pushNamed(context, RoutePaths.adminInbox).then((_) {
-                  _loadUnreadCount(); // Refresh count after returning
-                });
-              },
-            ),
             const SizedBox(width: 10),
             _avatar(
               onTap: () =>
-                  Navigator.pushNamed(context, RoutePaths.adminProfile),
+                  Navigator.pushNamed(context, RoutePaths.adminSettings),
             ),
           ],
         );
@@ -576,62 +556,6 @@ class _TopBarState extends State<_TopBar> {
     );
   }
 
-  Widget _iconBubble({
-    required IconData icon,
-    required VoidCallback onTap,
-    Color? dotColor,
-    int? count,
-  }) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.black.withOpacity(0.06)),
-            ),
-            child: Icon(icon, color: C.grey),
-          ),
-        ),
-        if (dotColor != null && (count == null || count > 0))
-          Positioned(
-            right: 0,
-            top: 0,
-            child: Container(
-              constraints: BoxConstraints(
-                minWidth: count != null ? 18.0 : 8.0,
-                minHeight: count != null ? 18.0 : 8.0,
-              ),
-              padding: count != null
-                  ? const EdgeInsets.symmetric(horizontal: 4)
-                  : EdgeInsets.zero,
-              decoration: BoxDecoration(
-                color: dotColor,
-                borderRadius: count != null ? BorderRadius.circular(9) : null,
-                shape: count != null ? BoxShape.rectangle : BoxShape.circle,
-              ),
-              alignment: Alignment.center,
-              child: count != null
-                  ? Text(
-                      count.toString(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    )
-                  : null,
-            ),
-          ),
-      ],
-    );
-  }
 
   Widget _avatar({required VoidCallback onTap}) {
     return InkWell(

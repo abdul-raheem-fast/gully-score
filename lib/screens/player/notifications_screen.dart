@@ -44,16 +44,17 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     try {
       await SupabaseService.updateMembershipStatus(
           id: membershipId, status: decision);
+      
+      // Delete the original request notification so it doesn't show up again
+      await SupabaseService.deleteNotification(nId);
+      
       if (!mounted) return;
-      // Optimistically remove / update the card.
+      
+      // Remove it from the local list
       setState(() {
-        _notifications = _notifications.map((n) {
-          if (n['id']?.toString() == nId) {
-            return {...n, '_acted': decision};
-          }
-          return n;
-        }).toList();
+        _notifications.removeWhere((n) => n['id']?.toString() == nId);
       });
+
       _showSnack(
         decision == 'approved'
             ? '✅ Player approved and added to team!'
