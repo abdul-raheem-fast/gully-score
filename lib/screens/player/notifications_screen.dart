@@ -127,14 +127,30 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   if (!_loading && _notifications.isNotEmpty)
                     TextButton(
                       onPressed: () async {
-                        await SupabaseService.markAllNotificationsRead();
-                        await _load();
+                        final ok = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text('Clear all?'),
+                            content: const Text('This will delete all your notifications forever.'),
+                            actions: [
+                              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+                              TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Clear All')),
+                            ],
+                          ),
+                        );
+                        if (ok == true) {
+                          setState(() => _loading = true);
+                          for (final n in _notifications) {
+                            await SupabaseService.deleteNotification(n['id'].toString());
+                          }
+                          await _load();
+                        }
                       },
                       child: const Text(
-                        'Mark all read',
+                        'Clear all',
                         style: TextStyle(
                             fontSize: 12,
-                            color: C.g1,
+                            color: Colors.redAccent,
                             fontWeight: FontWeight.w600),
                       ),
                     ),
@@ -162,19 +178,36 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                                 const SizedBox(height: 10),
                             itemBuilder: (context, i) {
                               final n = _notifications[i];
+                              final nId = n['id']?.toString() ?? '';
                               final type = n['type']?.toString() ?? '';
-                              if (type == 'join_request' || type == 'team_invitation') {
-                                return _JoinRequestCard(
-                                  notif: n,
-                                  acting: _acting
-                                      .contains(n['id']?.toString() ?? ''),
-                                  onApprove: () =>
-                                      _handleJoinRequest(n, 'approved'),
-                                  onReject: () =>
-                                      _handleJoinRequest(n, 'rejected'),
-                                );
-                              }
-                              return _DecisionCard(notif: n);
+                              
+                              return Dismissible(
+                                key: Key(nId),
+                                direction: DismissDirection.endToStart,
+                                background: Container(
+                                  alignment: Alignment.centerRight,
+                                  padding: const EdgeInsets.only(right: 20),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.shade100,
+                                    borderRadius: BorderRadius.circular(16),
+                                  ),
+                                  child: Icon(Icons.delete_outline, color: Colors.red.shade700),
+                                ),
+                                onDismissed: (_) {
+                                  SupabaseService.deleteNotification(nId);
+                                  setState(() {
+                                    _notifications.removeAt(i);
+                                  });
+                                },
+                                child: type == 'join_request' || type == 'team_invitation'
+                                    ? _JoinRequestCard(
+                                        notif: n,
+                                        acting: _acting.contains(nId),
+                                        onApprove: () => _handleJoinRequest(n, 'approved'),
+                                        onReject: () => _handleJoinRequest(n, 'rejected'),
+                                      )
+                                    : _DecisionCard(notif: n),
+                              );
                             },
                           ),
                         ),

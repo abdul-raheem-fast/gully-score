@@ -881,38 +881,94 @@ class SupabaseService {
   static Future<List<TeamMembership>> fetchMyMemberships() async {
     final userId = currentUser?.id;
     if (userId == null) return [];
-    final response = await client
-        .from('team_memberships')
-        .select()
-        .eq('user_id', userId)
-        .order('applied_at', ascending: false);
-    final rows = List<Map<String, dynamic>>.from(response);
-    return rows.map((row) {
-      final statusRaw = (row['status'] as String?) ?? 'pending';
-      MembershipStatus status;
-      switch (statusRaw) {
-        case 'approved':
-          status = MembershipStatus.approved;
-          break;
-        case 'rejected':
-          status = MembershipStatus.rejected;
-          break;
-        case 'invited':
-          status = MembershipStatus.invited;
-          break;
-        default:
-          status = MembershipStatus.pending;
+
+    final list = <TeamMembership>[];
+
+    try {
+      // 1. Fetch teams where I am the captain
+      final ownedResp = await client
+          .from('teams')
+          .select('id, name, abbreviation, created_at')
+          .eq('captain_user_id', userId);
+      final ownedRows = List<Map<String, dynamic>>.from(ownedResp);
+      for (final row in ownedRows) {
+        list.add(TeamMembership(
+          id: 'owned_${row['id']}',
+          teamId: row['id']?.toString() ?? '',
+          teamName: (row['name'] as String?)?.trim() ?? 'Unknown Team',
+          teamAbbreviation: (row['abbreviation'] as String?)?.trim() ?? 'TEAM',
+          status: MembershipStatus.approved,
+          appliedAt: DateTime.tryParse(row['created_at']?.toString() ?? '') ??
+              DateTime.now(),
+        ));
       }
-      return TeamMembership(
-        id: row['id']?.toString() ?? '',
-        teamId: row['team_name']?.toString() ?? '',
-        teamName: row['team_name']?.toString() ?? '',
-        teamAbbreviation: row['team_abbreviation']?.toString() ?? '',
-        status: status,
-        appliedAt: DateTime.tryParse(row['applied_at']?.toString() ?? '') ??
-            DateTime.now(),
-      );
-    }).toList();
+
+      // 2. Also check team_players where I am marked as captain by name
+      final myName = getCurrentUserName()?.trim();
+      if (myName != null && myName.isNotEmpty) {
+        final rosterResp = await client
+            .from('team_players')
+            .select('team_name, teams(id, abbreviation, created_at)')
+            .eq('player_name', myName)
+            .eq('is_captain', true);
+        final rosterRows = List<Map<String, dynamic>>.from(rosterResp);
+        for (final row in rosterRows) {
+          final tName = (row['team_name'] as String?)?.trim() ?? '';
+          if (tName.isEmpty || list.any((m) => m.teamName == tName)) continue;
+
+          final tData = row['teams'] as Map<String, dynamic>?;
+          list.add(TeamMembership(
+            id: 'roster_cap_${tData?['id'] ?? tName}',
+            teamId: tData?['id']?.toString() ?? tName,
+            teamName: tName,
+            teamAbbreviation: (tData?['abbreviation'] as String?)?.trim() ?? '',
+            status: MembershipStatus.approved,
+            appliedAt: DateTime.tryParse(tData?['created_at']?.toString() ?? '') ??
+                DateTime.now(),
+          ));
+        }
+      }
+
+      // 3. Fetch my membership records (applications, joins)
+      final response = await client
+          .from('team_memberships')
+          .select()
+          .eq('user_id', userId)
+          .order('applied_at', ascending: false);
+      final rows = List<Map<String, dynamic>>.from(response);
+      for (final row in rows) {
+        final tName = (row['team_name'] as String?)?.trim() ?? '';
+        // Avoid duplicates if already added as owned
+        if (list.any((m) => m.teamName == tName)) continue;
+
+        final statusRaw = (row['status'] as String?) ?? 'pending';
+        MembershipStatus status;
+        switch (statusRaw) {
+          case 'approved':
+            status = MembershipStatus.approved;
+            break;
+          case 'rejected':
+            status = MembershipStatus.rejected;
+            break;
+          case 'invited':
+            status = MembershipStatus.invited;
+            break;
+          default:
+            status = MembershipStatus.pending;
+        }
+        list.add(TeamMembership(
+          id: row['id']?.toString() ?? '',
+          teamId: row['team_name']?.toString() ?? '',
+          teamName: tName,
+          teamAbbreviation: (row['team_abbreviation'] as String?)?.trim() ?? '',
+          status: status,
+          appliedAt: DateTime.tryParse(row['applied_at']?.toString() ?? '') ??
+              DateTime.now(),
+        ));
+      }
+    } catch (_) {}
+
+    return list..sort((a, b) => b.appliedAt.compareTo(a.appliedAt));
   }
 
   /// Fetch all team_memberships rows for admin (typically pending ones).
@@ -950,32 +1006,20 @@ class SupabaseService {
     }).toList();
   }
 
-  /// Returns team names where the current user is captain in `players` or in `teams`.
+  /// Returns team names where the current user is captain.
   static Future<List<String>> fetchCaptainTeams() async {
     final userId = currentUser?.id;
     if (userId == null) return [];
     final names = <String>{};
-    final userName = getCurrentUserName();
-    if (userName != null && userName.isNotEmpty) {
-      final response = await client
-          .from('players')
-          .select('team_name')
-          .eq('player_name', userName)
-          .eq('is_captain', true);
-      final rows = List<Map<String, dynamic>>.from(response);
-      for (final r in rows) {
-        final t = (r['team_name'] as String?)?.trim() ?? '';
-        if (t.isNotEmpty) names.add(t);
-      }
-    }
     try {
-      final teamsResp = await client
+      final response = await client
           .from('teams')
           .select('name')
           .eq('captain_user_id', userId);
-      for (final row in List<Map<String, dynamic>>.from(teamsResp)) {
-        final n = (row['name'] as String?)?.trim() ?? '';
-        if (n.isNotEmpty) names.add(n);
+      final rows = List<Map<String, dynamic>>.from(response);
+      for (final r in rows) {
+        final t = (r['name'] as String?)?.trim() ?? '';
+        if (t.isNotEmpty) names.add(t);
       }
     } catch (_) {}
     return names.toList()
@@ -1035,10 +1079,7 @@ class SupabaseService {
     }).toList();
   }
 
-<<<<<<< HEAD
   /// Approve or reject a membership request and notify the applicant.
-=======
-  /// Approve or reject a membership request.
   static Future<void> _invokeAdminManage(Map<String, dynamic> body) async {
     await client.functions.invoke('admin-manage', body: body);
   }
@@ -1074,8 +1115,6 @@ class SupabaseService {
       'role': role,
     });
   }
-
->>>>>>> 102e8a27d2c2d7ababede0851e3d71760e91e8b6
   static Future<void> updateMembershipStatus({
     required String id,
     required String status, // 'approved' | 'rejected'
@@ -1124,16 +1163,47 @@ class SupabaseService {
     final userId = currentUser?.id;
     if (userId == null) return [];
     try {
+      // Fetch notifications
       final response = await client
           .from('notifications')
           .select()
           .eq('recipient_id', userId)
           .order('created_at', ascending: false)
           .limit(50);
-      return List<Map<String, dynamic>>.from(response);
+      final list = List<Map<String, dynamic>>.from(response);
+
+      // Verify teams still exist for join_requests
+      final teamNames = list
+          .where((n) => n['team_name'] != null)
+          .map((n) => n['team_name'].toString())
+          .toSet();
+      
+      if (teamNames.isEmpty) return list;
+
+      final teamCheck = await client
+          .from('teams')
+          .select('name')
+          .inFilter('name', teamNames.toList());
+      final existingTeams = List<Map<String, dynamic>>.from(teamCheck)
+          .map((t) => t['name'].toString())
+          .toSet();
+
+      // Filter out notifications for non-existent teams if they are requests
+      return list.where((n) {
+        final t = n['team_name']?.toString() ?? '';
+        final type = n['type']?.toString() ?? '';
+        if (t.isNotEmpty && (type == 'join_request' || type == 'team_invitation')) {
+          return existingTeams.contains(t);
+        }
+        return true;
+      }).toList();
     } catch (_) {
       return [];
     }
+  }
+
+  static Future<void> deleteNotification(String id) async {
+    await client.from('notifications').delete().eq('id', id);
   }
 
   /// Count unread notifications for the current user.
@@ -1842,6 +1912,9 @@ class SupabaseService {
       }
     }
 
+    int catches = 0;
+    final runsList = <int>[];
+
     for (final e in ballResp) {
       final inningsId = e['innings_id']?.toString() ?? '';
       final innings = inningsById[inningsId];
@@ -1860,9 +1933,13 @@ class SupabaseService {
         }
       }
       if (wicketType.isNotEmpty && wicketPlayer == playerName) {
-        dismissals += 1;
+        if (wicketType.toLowerCase().contains('caught') || wicketType.toLowerCase().contains('stumped')) {
+          catches += 1;
+        } else {
+          dismissals += 1;
+        }
       }
-      if (bowler == playerName && wicketType.isNotEmpty) {
+      if (bowler == playerName && wicketType.isNotEmpty && !wicketType.toLowerCase().contains('run out')) {
         wickets += 1;
         if (matchId.isNotEmpty) {
           wicketsByMatch[matchId] = (wicketsByMatch[matchId] ?? 0) + 1;
@@ -1870,32 +1947,44 @@ class SupabaseService {
       }
     }
 
+    // Dynamic Batting Impact: Strike rate (normalized around 150) + Runs per match
     final average = dismissals > 0 ? totalRuns / dismissals : totalRuns.toDouble();
     final strikeRate = totalBalls > 0 ? (totalRuns / totalBalls) * 100 : 0.0;
-    final battingImpact = (strikeRate / 16).clamp(0.0, 10.0);
-    final consistency = matches > 0 ? (average / 6).clamp(0.0, 10.0) : 0.0;
-    final fielding = (5.0 + (wickets / (matches == 0 ? 1 : matches)))
-        .clamp(0.0, 10.0)
-        .toDouble();
-    final sportsmanship = matches > 0 ? 8.5 : 0.0;
-    final overall = ((battingImpact * 0.4) +
+    
+    // Penalize impact and consistency for very low match counts to make them "earned"
+    final matchFactor = (matches / 5.0).clamp(0.4, 1.0);
+    
+    final battingImpact = (((strikeRate / 25) + (totalRuns / (matches * 15).clamp(1, 1000))) * matchFactor).clamp(0.0, 10.0);
+    
+    // Consistency: Based on runs variance and scores above 20
+    final double scoresAbove20 = runsByMatch.values.where((v) => v >= 20).length.toDouble();
+    final consistency = matches > 0 
+        ? ((5.0 + (scoresAbove20 / matches * 5.0)) * matchFactor).clamp(0.0, 10.0) 
+        : 0.0;
+    
+    // Fielding: Catches + participation
+    final fielding = (5.0 + (catches * 1.2) + (matches * 0.1)).clamp(0.0, 10.0);
+    
+    // Sportsmanship: Baseline 7.5 + tiny experience factor
+    final sportsmanship = matches > 0 ? (7.0 + (matches * 0.15).clamp(0.0, 2.5)) : 0.0;
+
+    final overall = ((battingImpact * 0.35) +
             (consistency * 0.3) +
-            (fielding * 0.2) +
+            (fielding * 0.25) +
             (sportsmanship * 0.1))
         .clamp(0.0, 10.0);
 
     final formEntries = runsByMatch.entries.toList()
-      ..sort((a, b) {
-        final ia = inningsRows
-            .where((r) => (r['match_id']?.toString() ?? '') == a.key)
-            .fold<int>(0, (s, r) => s + ((r['innings_no'] as num?)?.toInt() ?? 0));
-        final ib = inningsRows
-            .where((r) => (r['match_id']?.toString() ?? '') == b.key)
-            .fold<int>(0, (s, r) => s + ((r['innings_no'] as num?)?.toInt() ?? 0));
-        return ia.compareTo(ib);
-      });
-    final recentRuns =
-        formEntries.map((e) => e.value).toList().reversed.take(6).toList().reversed.toList();
+      ..sort((a, b) => a.key.compareTo(b.key));
+    
+    final recentRuns = formEntries.map((e) => e.value).toList();
+    if (recentRuns.length > 6) {
+      recentRuns.removeRange(0, recentRuns.length - 6);
+    }
+    // Pad with -1 to indicate "no match" so UI can show empty slots
+    while (recentRuns.length < 6) {
+      recentRuns.insert(0, -1);
+    }
 
     return PlayerStatsSnapshot(
       matches: matches,

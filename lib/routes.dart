@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'models/scoring_models.dart';
+import 'models/admin_models.dart';
 import 'route_paths.dart';
 
 import 'screens/admin/admin_dashboard_screen.dart';
@@ -22,6 +23,10 @@ import 'screens/player/live_scoring_screen.dart';
 import 'screens/player/match_scorecard_screen.dart';
 import 'screens/player/ai_chat_screen.dart';
 import 'screens/player/rankings_screen.dart';
+import 'screens/player/my_teams_screen.dart';
+import 'screens/player/notifications_screen.dart';
+import 'screens/player/create_team_screen.dart';
+import 'widgets/app_gates.dart';
 
 /// Central app route definitions.
 class AppRoutes {

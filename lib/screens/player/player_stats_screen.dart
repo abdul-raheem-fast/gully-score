@@ -524,14 +524,44 @@ class _RecentFormCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: List.generate(values.length, (i) {
                 final v = values[i];
+                if (v == -1) {
+                  // Placeholder for match not played yet
+                  return Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        const SizedBox(height: 18),
+                        Expanded(
+                          child: Align(
+                            alignment: Alignment.bottomCenter,
+                            child: Container(
+                              width: 12,
+                              height: 4,
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade200,
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '-',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.grey.shade300,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
                 final hFrac = maxV > 0 ? (v / maxV) : 0.0;
                 final color = _barColor(i, v, maxV);
                 return Expanded(
                   child: Padding(
-                    padding: EdgeInsets.only(
-                      left: i == 0 ? 0 : 5,
-                      right: i == values.length - 1 ? 0 : 5,
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
@@ -548,13 +578,13 @@ class _RecentFormCard extends StatelessWidget {
                           child: Align(
                             alignment: Alignment.bottomCenter,
                             child: FractionallySizedBox(
-                              heightFactor: hFrac.clamp(0.08, 1.0),
-                              widthFactor: 1,
+                              heightFactor: hFrac.clamp(0.1, 1.0),
+                              widthFactor: 0.6, // Thinner bars for better look
                               child: Container(
                                 decoration: BoxDecoration(
                                   color: color,
                                   borderRadius: const BorderRadius.vertical(
-                                    top: Radius.circular(8),
+                                    top: Radius.circular(6),
                                   ),
                                 ),
                               ),
@@ -565,7 +595,7 @@ class _RecentFormCard extends StatelessWidget {
                         Text(
                           'M${i + 1}',
                           style: const TextStyle(
-                            fontSize: 11,
+                            fontSize: 10,
                             fontWeight: FontWeight.w600,
                             color: C.grey,
                           ),

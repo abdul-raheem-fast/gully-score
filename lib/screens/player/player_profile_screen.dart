@@ -19,6 +19,12 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
   void initState() {
     super.initState();
     _profileFuture = SupabaseService.fetchCurrentUserProfile();
+    // Force a refresh of memberships to ensure owned teams show up
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        AppStore.of(context).refreshMyMemberships();
+      }
+    });
   }
 
   @override
@@ -153,23 +159,6 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
                 ]),
                 const SizedBox(height: 24),
 
-                _HoverButton(
-                  onTap: () {},
-                  filled: true,
-                  color: C.g2,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: const [
-                      Icon(Icons.edit_outlined, color: C.white, size: 18),
-                      SizedBox(width: 8),
-                      Text('Edit Profile',
-                          style: TextStyle(
-                              color: C.white,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 15)),
-                    ],
-                  ),
-                ),
                 const SizedBox(height: 12),
                 _HoverButton(
                   onTap: () {
