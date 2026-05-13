@@ -153,7 +153,6 @@ class _PlayerProfileScreenState extends State<PlayerProfileScreen> {
 
                 const SizedBox(height: 16),
                 _section(context, 'General', [
-                  _tile(Icons.notifications_outlined, 'Notifications', 'On'),
                   _tile(Icons.shield_outlined, 'Privacy', 'Public profile'),
                   _tile(Icons.info_outline, 'App Version', '1.0.0'),
                 ]),
