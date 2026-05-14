@@ -44,6 +44,22 @@ flutter run -t lib/main_admin.dart
 
 See `PROJECT_STATUS.md` for a full “what’s built so far” snapshot.
 
+## Edge functions (Supabase)
+
+The app uses two edge functions:
+
+- `gully-ai-chat` for Broskie AI
+- `admin-manage` for admin actions (role change, block/unblock, delete team)
+
+Deploy both functions:
+
+```bash
+supabase functions deploy gully-ai-chat
+supabase functions deploy admin-manage
+```
+
+Web note: `admin-manage` includes CORS handling so Flutter web can call it.
+
 ## Broskie AI setup (Groq + Supabase)
 
 The app calls Supabase Edge Function `gully-ai-chat`, which then calls Groq.
